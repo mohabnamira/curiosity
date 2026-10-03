@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:perplexity/pages/home_pages.dart';
+import 'package:perplexity/theme/colors.dart';
 
 void main() {
   runApp(const MainApp());
@@ -9,8 +11,12 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(body: Center(child: Text('Hello World!'))),
+    return MaterialApp(
+     title: 'Flutter Demo',
+      theme: ThemeData(
+        scaffoldBackgroundColor:AppColors.background,
+      ),
+      home: const HomePage()
     );
   }
 }
