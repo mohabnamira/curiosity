@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:perplexity/pages/home_pages.dart';
 import 'package:perplexity/theme/colors.dart';
 
@@ -12,11 +13,14 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-     title: 'Flutter Demo',
+      title: 'Flutter Demo',
       theme: ThemeData(
-        scaffoldBackgroundColor:AppColors.background,
+        scaffoldBackgroundColor: AppColors.background,
+        textTheme: GoogleFonts.interTextTheme(
+          ThemeData.dark().textTheme,
+        ),
       ),
-      home: const HomePage()
+      home: const HomePage(),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:perplexity/widgets/side_bar.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -6,11 +7,13 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Text(
-          'Hello, World!',
-          style: TextStyle(fontSize: 24),
-        ),
+      body: Row(
+        children: [
+          const SideBar(),
+          Column(
+            children: [],
+          ),
+        ],
       ),
     );
   }
