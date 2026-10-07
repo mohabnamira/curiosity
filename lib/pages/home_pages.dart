@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:perplexity/theme/colors.dart';
-import 'package:perplexity/widgets/search_section.dart';
-import 'package:perplexity/widgets/side_bar.dart';
+import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/widgets/search_section.dart';
+import 'package:curiosity/widgets/side_bar.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -25,7 +25,7 @@ class HomePage extends StatelessWidget {
                       children: [
                         padding(
                         padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text("© 2024 Perplexity AI, Inc. All rights reserved.",
+                        child: Text("© 2024 curiosity AI, Inc. All rights reserved.",
                          style: TextStyle(color: AppColors.footerGrey, fontSize: 14),
                          ),
                         )

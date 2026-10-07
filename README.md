@@ -1,3 +1,3 @@
-# perplexity
+# curiosity
 
 A new Flutter project.

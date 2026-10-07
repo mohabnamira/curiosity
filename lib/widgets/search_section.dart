@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:perplexity/theme/colors.dart';
-import 'package:perplexity/widgets/search_bar_button.dart';
+import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/widgets/search_bar_button.dart';
 
 class SearchSection extends StatelessWidget {
   const SearchSection({super.key});

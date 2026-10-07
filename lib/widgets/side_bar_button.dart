@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:perplexity/theme/colors.dart';
+import 'package:curiosity/theme/colors.dart';
 
 class SideBarButton extends StatelessWidget {
   final bool isCollapsed;

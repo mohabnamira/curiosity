@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:perplexity/theme/colors.dart';
-import 'package:perplexity/widgets/side_bar_button.dart';
+import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/widgets/side_bar_button.dart';
 
 class SideBar extends StatefulWidget {
   const SideBar({super.key});
