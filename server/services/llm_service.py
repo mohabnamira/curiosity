@@ -28,8 +28,9 @@ User query:
 {query}
 """
 
-        response = self.client.models.generate_content(
+        response = self.client.models.generate_content_stream(
             model=self.model,
             contents=full_prompt,
         )
-        return response.text
+        for chunk in response:
+            yield chunk.text
