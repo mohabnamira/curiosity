@@ -12,6 +12,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  String fullResponse = '';
   @override
   void initState() {
     super.initState();
@@ -36,7 +37,7 @@ class _HomePageState extends State<HomePage> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
-                          "© 2024 curiosity AI, Inc. All rights reserved.",
+                          "© 2026 curiosity AI, Inc. All rights reserved.",
                           style: TextStyle(
                             color: AppColors.footerGrey,
                             fontSize: 14,
