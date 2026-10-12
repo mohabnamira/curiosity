@@ -1,4 +1,3 @@
-import 'package:curiosity/pages/chat_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/pages/home_pages.dart';
@@ -28,9 +27,7 @@ class MainApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const ChatPage(
-        question: '',
-      ),
+      home: HomePage()
     );
   }
 }

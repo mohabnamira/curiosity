@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/search_bar_button.dart';
+import 'package:curiosity/pages/chat_page.dart';
 
 class SearchSection extends StatefulWidget {
   const SearchSection({super.key});
@@ -77,6 +78,8 @@ class _SearchSectionState extends State<SearchSection> {
                     GestureDetector(
                       onTap: () {
                         ChatWebService().chat(queryController.text.trim());
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => 
+                        ChatPage(question: queryController.text.trim())));
                       },
                       child: Container(
                         padding: const EdgeInsets.all(9),
