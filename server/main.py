@@ -1,38 +1,54 @@
-from fastapi import FastAPI
-from services.sort_source_service import SortSourceService
+import logging
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
+
 from pydantic_models.chat_body import ChatBody
 from services.search_service import SearchService
 from services.llm_service import LLMService
-from fastapi.websockets import WebSocket
-import asyncio
 
+logger = logging.getLogger("curiosity")
 app = FastAPI()
 search_service = SearchService()
-sort_service = SortSourceService()
 llm_service = LLMService()
 
-@app.websocket("/ws/chat")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
 
+async def send(ws: WebSocket, type_: str, id_: str | None, data=None):
+    await ws.send_json({"type": type_, "id": id_, "data": data})
+
+
+async def handle_chat(ws: WebSocket, body: ChatBody):
+    try:
+        sources = await search_service.web_search(body.query)
+        await send(ws, "search_results", body.id, [
+            {k: s[k] for k in ("index", "title", "url", "snippet")}
+            for s in sources
+        ])
+        async for text in llm_service.stream_answer(body.query, sources):
+            await send(ws, "content", body.id, text)
+        await send(ws, "done", body.id)
+    except WebSocketDisconnect:
+        raise
+    except Exception:
+        logger.exception("chat failed")
+        await send(ws, "error", body.id, "Something went wrong. Please try again.")
+
+
+@app.websocket("/ws/chat")
+async def chat_socket(ws: WebSocket):
+    await ws.accept()
     try:
         while True:
-            data = await websocket.receive_json()
-            query = data.get("query")
-            if not query:
+            try:
+                raw = await ws.receive_json()
+                body = ChatBody(**raw)
+            except (ValueError, ValidationError, TypeError):
+                await send(ws, "error", None, "Invalid request")
                 continue
-            search_results = search_service.web_search(query)
-            sorted_results = sort_service.sort_sources(query, search_results)
-            await websocket.send_json({"type": 'search_results', "data": sorted_results})
-            for chunk in llm_service.generate_response(query, sorted_results):
-                await asyncio.sleep(0.02)
-                await websocket.send_json({"type": 'content', "data": chunk})
+            await handle_chat(ws, body)
+    except WebSocketDisconnect:
+        pass
 
-    except Exception as e:
-        print("WebSocket disconnected or error occurred:", repr(e))
 
-@app.post("/chat")
-def chat_endpoint(body: ChatBody):
-    search_results = search_service.web_search(body.query)
-    sorted_results = sort_service.sort_sources(body.query, search_results)
-    return {"response": llm_service.generate_full_response(body.query, sorted_results)}
+@app.get("/")
+def read_root():
+    return {"message": "Server is running"}
