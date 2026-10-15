@@ -1,40 +1,60 @@
-from concurrent.futures import ThreadPoolExecutor, wait
-from config import Settings
-from tavily import TavilyClient
-
+import asyncio
+import httpx
 import trafilatura
+from tavily import AsyncTavilyClient
+from config import Settings
+
 settings = Settings()
-tavily_client = TavilyClient(api_key=settings.TAVILY_API_KEY)
+tavily_client = AsyncTavilyClient(api_key=settings.TAVILY_API_KEY)
+
+MAX_CHARS_PER_SOURCE = 1500
+SNIPPET_CHARS = 200
+
+
+def chunk_text(text: str, max_chars: int = MAX_CHARS_PER_SOURCE) -> str:
+    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+    kept, total = [], 0
+    for p in paragraphs:
+        if total + len(p) > max_chars:
+            break
+        kept.append(p)
+        total += len(p) + 1
+    return "\n".join(kept) or text[:max_chars]
+
 
 class SearchService:
-    def web_search(self, query: str):
-        response = tavily_client.search(query, max_results=10)
-        search_results = response.get("results", [])
+    async def web_search(self, query: str, max_results: int = 5):
+        response = await tavily_client.search(query, max_results=max_results)
+        items = response.get("results", [])
 
-        executor = ThreadPoolExecutor(max_workers=10)
-        futures = [executor.submit(self._fetch_item, item) for item in search_results]
+        async with httpx.AsyncClient(
+            timeout=8, follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0"},
+        ) as client:
+            pages = await asyncio.gather(
+                *(self._scrape(client, item["url"]) for item in items)
+            )
 
-        done, _ = wait(futures, timeout=5)
-        executor.shutdown(wait=False, cancel_futures=True)
+        results = []
+        for n, (item, page) in enumerate(zip(items, pages), start=1):
+            tavily_text = item.get("content", "")
+            results.append({
+                "index": n,
+                "title": item.get("title", ""),
+                "url": item["url"],
+                "snippet": tavily_text[:SNIPPET_CHARS],
+                "content": chunk_text(page) if page else tavily_text,
+            })
+        return results
 
-        return [f.result() for f in futures if f in done]
-
-    def _fetch_item(self, item):
-        content = None
+    async def _scrape(self, client: httpx.AsyncClient, url: str) -> str:
         try:
-            downloaded = trafilatura.fetch_url(item.get("url"))
-            if downloaded:
-                content = trafilatura.extract(
-                    downloaded,
-                    include_comments=False,
-                    include_tables=False,
-                    include_formatting=False
-                )
+            resp = await client.get(url)
+            resp.raise_for_status()
+            text = await asyncio.to_thread(
+                trafilatura.extract, resp.text,
+                include_comments=False, include_tables=False,
+            )
+            return text or ""
         except Exception:
-            pass
-
-        return {
-            "title": item.get("title", ""),
-            "url": item.get("url"),
-            "content": content
-        }
+            return ""
