@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/services/chat_web_service.dart';
 
-final chatNotifierProvider = NotifierProvider<ChatNotifier, ChatState>(() {
-  return ChatNotifier();
-});
+final chatNotifierProvider =
+    NotifierProvider<ChatNotifier, ChatState>(ChatNotifier.new);
 
 class ChatState {
   final List<Turn> turns;
@@ -15,11 +14,10 @@ class ChatState {
 
   Turn? get activeTurn {
     if (activeTurnId == null) return null;
-    try {
-      return turns.firstWhere((t) => t.id == activeTurnId);
-    } catch (_) {
-      return null;
+    for (final t in turns) {
+      if (t.id == activeTurnId) return t;
     }
+    return null;
   }
 
   ChatState copyWith({List<Turn>? turns, String? activeTurnId}) {
@@ -31,31 +29,36 @@ class ChatState {
 }
 
 class ChatNotifier extends Notifier<ChatState> {
-  StreamSubscription? _subscription;
-
   @override
   ChatState build() {
     final webService = ref.watch(chatWebServiceProvider);
-    _subscription?.cancel();
-    _subscription = webService.messageStream.listen(_handleMessage);
-    ref.onDispose(() => _subscription?.cancel());
+
+    final messageSub = webService.messageStream.listen(_handleMessage);
+    final lostSub = webService.connectionLostStream
+        .listen((_) => _failInFlightTurns('Connection lost'));
+
+    ref.onDispose(() {
+      messageSub.cancel();
+      lostSub.cancel();
+    });
+
     return const ChatState();
   }
 
+  /// Adds the turn to state first, then sends. The turn always exists before
+  /// any server reply can arrive, so no event can be lost.
   String sendQuery(String query) {
-    final webService = ref.read(chatWebServiceProvider);
-    final id = webService.sendChat(query);
-    
-    final newTurn = Turn(
-      id: id,
-      question: query,
-      status: TurnStatus.searching,
-    );
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
 
     state = state.copyWith(
-      turns: [...state.turns, newTurn],
+      turns: [...state.turns, Turn(id: id, question: query)],
       activeTurnId: id,
     );
+
+    ref.read(chatWebServiceProvider).sendChat(id, query).catchError((_) {
+      _failTurn(id, 'Could not reach the server');
+    });
+
     return id;
   }
 
@@ -68,39 +71,68 @@ class ChatNotifier extends Notifier<ChatState> {
     final type = data['type']?.toString();
     if (id == null || type == null) return;
 
-    final turnIndex = state.turns.indexWhere((t) => t.id == id);
-    if (turnIndex == -1) return;
+    final turn = _findTurn(id);
+    if (turn == null || !turn.isInFlight) return;
 
-    final turn = state.turns[turnIndex];
-    Turn updatedTurn = turn;
+    Turn? updated;
 
-    if (type == 'search_results') {
-      final rawResults = data['data'];
-      if (rawResults is List) {
-        final sources = rawResults
-            .where((item) => item is Map)
-            .map((item) => Source.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
-        updatedTurn = turn.copyWith(sources: sources);
-      }
-    } else if (type == 'content') {
-      final chunk = data['data']?.toString() ?? '';
-      updatedTurn = turn.copyWith(
-        answer: turn.answer + chunk,
-        status: TurnStatus.generating,
-      );
-    } else if (type == 'done') {
-      updatedTurn = turn.copyWith(status: TurnStatus.done);
-    } else if (type == 'error') {
-      final errorMsg = data['data']?.toString() ?? 'Unknown error';
-      updatedTurn = turn.copyWith(
-        status: TurnStatus.error,
-        errorMessage: errorMsg,
-      );
+    switch (type) {
+      case 'search_results':
+        final raw = data['data'];
+        if (raw is List) {
+          final sources = raw
+              .whereType<Map>()
+              .map((item) => Source.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          updated = turn.copyWith(
+            sources: sources,
+            status: TurnStatus.generating,
+          );
+        }
+      case 'content':
+        updated = turn.copyWith(
+          answer: turn.answer + (data['data']?.toString() ?? ''),
+          status: TurnStatus.generating,
+        );
+      case 'done':
+        updated = turn.copyWith(status: TurnStatus.done);
+      case 'error':
+        updated = turn.copyWith(
+          status: TurnStatus.error,
+          errorMessage: data['data']?.toString() ?? 'Unknown error',
+        );
     }
 
-    final updatedTurns = List<Turn>.from(state.turns);
-    updatedTurns[turnIndex] = updatedTurn;
-    state = state.copyWith(turns: updatedTurns);
+    if (updated != null) _replaceTurn(updated);
+  }
+
+  void _failTurn(String id, String message) {
+    final turn = _findTurn(id);
+    if (turn == null || !turn.isInFlight) return;
+    _replaceTurn(
+      turn.copyWith(status: TurnStatus.error, errorMessage: message),
+    );
+  }
+
+  void _failInFlightTurns(String message) {
+    for (final turn in state.turns.where((t) => t.isInFlight).toList()) {
+      _failTurn(turn.id, message);
+    }
+  }
+
+  Turn? _findTurn(String id) {
+    for (final t in state.turns) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
+
+  void _replaceTurn(Turn updated) {
+    state = state.copyWith(
+      turns: [
+        for (final t in state.turns)
+          if (t.id == updated.id) updated else t,
+      ],
+    );
   }
 }

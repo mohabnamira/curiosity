@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:curiosity/pages/chat_page.dart';
+import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/search_bar_button.dart';
-import 'package:curiosity/pages/chat_page.dart';
 
-class SearchSection extends StatefulWidget {
+class SearchSection extends ConsumerStatefulWidget {
   const SearchSection({super.key});
 
   @override
-  State<SearchSection> createState() => _SearchSectionState();
+  ConsumerState<SearchSection> createState() => _SearchSectionState();
 }
 
-class _SearchSectionState extends State<SearchSection> {
+class _SearchSectionState extends ConsumerState<SearchSection> {
   final queryController = TextEditingController();
 
   @override
@@ -19,6 +21,17 @@ class _SearchSectionState extends State<SearchSection> {
     queryController.dispose();
     super.dispose();
   }
+
+  void _submit() {
+    final query = queryController.text.trim();
+    if (query.isEmpty) return;
+
+    ref.read(chatNotifierProvider.notifier).sendQuery(query);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ChatPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -40,7 +53,7 @@ class _SearchSectionState extends State<SearchSection> {
           decoration: BoxDecoration(
             color: AppColors.searchBar,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.searchBarBorder,width: 1.5),
+            border: Border.all(color: AppColors.searchBarBorder, width: 1.5),
           ),
           child: Column(
             children: [
@@ -48,6 +61,7 @@ class _SearchSectionState extends State<SearchSection> {
                 padding: const EdgeInsets.all(16.0),
                 child: TextField(
                   controller: queryController,
+                  onSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
                     hintText: 'Search anything...',
                     hintStyle: TextStyle(
@@ -75,10 +89,7 @@ class _SearchSectionState extends State<SearchSection> {
                     ),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => 
-                        ChatPage(question: queryController.text.trim())));
-                      },
+                      onTap: _submit,
                       child: Container(
                         padding: const EdgeInsets.all(9),
                         decoration: BoxDecoration(
@@ -89,15 +100,15 @@ class _SearchSectionState extends State<SearchSection> {
                           Icons.arrow_forward,
                           color: AppColors.background,
                           size: 16,
-                        )
+                        ),
                       ),
-                    )
+                    ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
-        )
+        ),
       ],
     );
   }

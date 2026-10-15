@@ -31,6 +31,10 @@ class Turn {
     this.errorMessage,
   });
 
+  /// True while the server can still send us events for this turn.
+  bool get isInFlight =>
+      status == TurnStatus.searching || status == TurnStatus.generating;
+
   Turn copyWith({
     String? id,
     String? question,

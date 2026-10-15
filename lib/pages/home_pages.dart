@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:curiosity/services/chat_web_service.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/search_section.dart';
 import 'package:curiosity/widgets/side_bar.dart';
-import 'package:curiosity/services/chat_web_service.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    ChatWebService().connect();
+    // The provider is lazy, so read it once here to open the socket at
+    // startup instead of on the first search.
+    ref.read(chatWebServiceProvider);
   }
 
   @override
@@ -27,14 +30,14 @@ class _HomePageState extends State<HomePage> {
           Expanded(
             child: Column(
               children: [
-                Expanded(child: const SearchSection()),
+                const Expanded(child: SearchSection()),
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Wrap(
+                  child: const Wrap(
                     alignment: WrapAlignment.center,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: EdgeInsets.symmetric(horizontal: 12),
                         child: Text(
                           "© 2026 curiosity AI, Inc. All rights reserved.",
                           style: TextStyle(

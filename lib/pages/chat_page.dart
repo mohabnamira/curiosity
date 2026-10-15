@@ -1,23 +1,24 @@
+import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/answer_section.dart';
 import 'package:curiosity/widgets/side_bar.dart';
 import 'package:curiosity/widgets/sources_section.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ChatPage extends StatelessWidget {
-  final String question;
-
-  const ChatPage({
-    super.key,
-    required this.question,
-  });
+class ChatPage extends ConsumerWidget {
+  const ChatPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final question = ref.watch(
+      chatNotifierProvider.select((s) => s.activeTurn?.question ?? ''),
+    );
+
     return Scaffold(
       body: Row(
         children: [
-          SideBar(),
+          const SideBar(),
           const SizedBox(width: 100),
           Expanded(
             child: SingleChildScrollView(
@@ -34,18 +35,18 @@ class ChatPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    SourcesSection(),
+                    const SourcesSection(),
                     const SizedBox(height: 24),
-                    AnswerSection(),
+                    const AnswerSection(),
                   ],
                 ),
               ),
             ),
           ),
-          Placeholder(
+          const Placeholder(
             strokeWidth: 0,
             color: AppColors.background,
-          )
+          ),
         ],
       ),
     );
