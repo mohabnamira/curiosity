@@ -25,7 +25,15 @@ class ChatWebService {
     });
   }
 
-  void chat(String query) {
-    _socket!.send(json.encode({'query': query}));
+  String chat(String query) {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    _socket!.send(json.encode({
+      'type': 'chat',
+      'id': id,
+      'query': query,
+      'history': [],
+      'focus': 'all',
+    }));
+    return id;
   }
 }
