@@ -17,7 +17,8 @@ class _SourcesSectionState extends State<SourcesSection> {
   @override
   void initState() {
     super.initState();
-    _subscription = ChatWebService().searchResults.listen((data) {
+    final dynamic chatWebService = ChatWebService();
+    _subscription = chatWebService.searchResultsStream.listen((data) {
       final results = data['data'];
       if (results is List) {
         if (mounted) {

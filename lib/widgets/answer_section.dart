@@ -1,12 +1,13 @@
 import 'dart:async';
-import 'package:curiosity/services/chat_web_service.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 
 class AnswerSection extends StatefulWidget {
-  const AnswerSection({super.key});
+  final Stream<dynamic>? responseStream;
+
+  const AnswerSection({super.key, this.responseStream});
 
   @override
   State<AnswerSection> createState() => _AnswerSectionState();
@@ -19,7 +20,7 @@ class _AnswerSectionState extends State<AnswerSection> {
   @override
   void initState() {
     super.initState();
-    _subscription = ChatWebService().contentStream.listen((data) {
+    _subscription = widget.responseStream?.listen((data) {
       if (mounted) {
         setState(() {
           fullResponse += (data['data']?.toString() ?? '');

@@ -1,33 +1,36 @@
 import 'dart:async';
-import 'package:web_socket_client/web_socket_client.dart';
 import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:web_socket_client/web_socket_client.dart';
 
+final chatWebServiceProvider = Provider<ChatWebService>((ref) {
+  final service = ChatWebService();
+  service.connect();
+  ref.onDispose(() => service.dispose());
+  return service;
+});
 
 class ChatWebService {
-  static final _instance = ChatWebService._internal();
   WebSocket? _socket;
-  factory ChatWebService() => _instance;
-  ChatWebService._internal();
-  final _searchResultsController = StreamController<Map<String, dynamic>>.broadcast();
-  final _contentController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get searchResults => _searchResultsController.stream;
-  Stream<Map<String, dynamic>> get contentStream => _contentController.stream;
+  final _messageController = StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
 
   void connect() {
     _socket = WebSocket(Uri.parse('ws://localhost:8000/ws/chat'));
     _socket!.messages.listen((message) {
-      final data = json.decode(message);
-      if (data['type'] == 'search_results') {
-        _searchResultsController.add(data);
-      } else if (data['type'] == 'content') {
-        _contentController.add(data);
-      }
+      try {
+        final data = json.decode(message);
+        if (data is Map<String, dynamic>) {
+          _messageController.add(data);
+        }
+      } catch (_) {}
     });
   }
 
-  String chat(String query) {
+  String sendChat(String query) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    _socket!.send(json.encode({
+    _socket?.send(json.encode({
       'type': 'chat',
       'id': id,
       'query': query,
@@ -35,5 +38,10 @@ class ChatWebService {
       'focus': 'all',
     }));
     return id;
+  }
+
+  void dispose() {
+    _socket?.close();
+    _messageController.close();
   }
 }

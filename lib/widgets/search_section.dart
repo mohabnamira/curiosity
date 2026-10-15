@@ -1,4 +1,3 @@
-import 'package:curiosity/services/chat_web_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/theme/colors.dart';
@@ -77,7 +76,6 @@ class _SearchSectionState extends State<SearchSection> {
                     const Spacer(),
                     GestureDetector(
                       onTap: () {
-                        ChatWebService().chat(queryController.text.trim());
                         Navigator.of(context).push(MaterialPageRoute(builder: (context) => 
                         ChatPage(question: queryController.text.trim())));
                       },
