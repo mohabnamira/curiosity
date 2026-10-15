@@ -1,55 +1,31 @@
-import 'dart:async';
-import 'package:curiosity/theme/colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/providers/chat_provider.dart';
+import 'package:curiosity/theme/colors.dart';
 
-
-class AnswerSection extends StatefulWidget {
-  final Stream<dynamic>? responseStream;
-
-  const AnswerSection({super.key, this.responseStream});
-
-  @override
-  State<AnswerSection> createState() => _AnswerSectionState();
-}
-
-class _AnswerSectionState extends State<AnswerSection> {
-  String fullResponse = '';
-  StreamSubscription? _subscription;
+class AnswerSection extends ConsumerWidget {
+  const AnswerSection({super.key});
 
   @override
-  void initState() {
-    super.initState();
-    _subscription = widget.responseStream?.listen((data) {
-      if (mounted) {
-        setState(() {
-          fullResponse += (data['data']?.toString() ?? '');
-        });
-      }
-    });
-  }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeTurn = ref.watch(chatNotifierProvider.select((state) => state.activeTurn));
+    final fullResponse = activeTurn?.answer ?? '';
+    final status = activeTurn?.status;
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
-  
-
-  @override
-  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Curiosity',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 12),
-        if (fullResponse.isEmpty)
+        if (fullResponse.isEmpty && status != TurnStatus.error && status != TurnStatus.done)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16.0),
             child: Row(
@@ -68,6 +44,14 @@ class _AnswerSectionState extends State<AnswerSection> {
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
               ],
+            ),
+          )
+        else if (status == TurnStatus.error)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Text(
+              'Error: ${activeTurn?.errorMessage ?? "Failed to generate answer"}',
+              style: const TextStyle(color: Colors.redAccent, fontSize: 14),
             ),
           )
         else
