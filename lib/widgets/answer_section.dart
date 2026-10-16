@@ -7,6 +7,22 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/widgets/glow_border.dart';
+
+/// Matches code (fenced or inline) OR a citation like [3].
+/// Code is matched first so we can leave it untouched.
+final _codeOrCitation = RegExp(r'(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[(\d+)\](?!\()');
+
+/// Turns valid [n] citations into markdown links "[n](#citation-n)".
+/// Citations inside code, or without a matching source, stay as plain text.
+String linkifyCitations(String text, int sourceCount) {
+  return text.replaceAllMapped(_codeOrCitation, (m) {
+    if (m.group(1) != null) return m.group(0)!; // code: leave as is
+    final n = int.tryParse(m.group(2)!);
+    if (n == null || n < 1 || n > sourceCount) return m.group(0)!;
+    return '[$n](#citation-$n)';
+  });
+}
 
 class CodeBlockWidget extends StatefulWidget {
   final String code;
@@ -22,19 +38,15 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
 
   Future<void> _copy() async {
     await Clipboard.setData(ClipboardData(text: widget.code));
-    setState(() {
-      _copied = true;
-    });
+    if (!mounted) return;
+    setState(() => _copied = true);
     await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() {
-        _copied = false;
-      });
-    }
+    if (mounted) setState(() => _copied = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final color = _copied ? Colors.greenAccent : Colors.grey.shade400;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -50,7 +62,8 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.grey.shade900,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(10)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -63,15 +76,12 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
                       Icon(
                         _copied ? Icons.check : Icons.copy_rounded,
                         size: 14,
-                        color: _copied ? Colors.greenAccent : Colors.grey.shade400,
+                        color: color,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         _copied ? 'Copied' : 'Copy',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _copied ? Colors.greenAccent : Colors.grey.shade400,
-                        ),
+                        style: TextStyle(fontSize: 12, color: color),
                       ),
                     ],
                   ),
@@ -85,10 +95,7 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
               scrollDirection: Axis.horizontal,
               child: Text(
                 widget.code,
-                style: GoogleFonts.firaCode(
-                  fontSize: 13,
-                  color: Colors.white,
-                ),
+                style: GoogleFonts.firaCode(fontSize: 13, color: Colors.white),
               ),
             ),
           ),
@@ -101,50 +108,20 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
 class CodeBlockBuilder extends MarkdownElementBuilder {
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
-    return CodeBlockWidget(code: element.textContent);
+    return CodeBlockWidget(code: element.textContent.trimRight());
   }
 }
 
-class AnswerSection extends ConsumerStatefulWidget {
+class AnswerSection extends ConsumerWidget {
   const AnswerSection({super.key});
 
   @override
-  ConsumerState<AnswerSection> createState() => _AnswerSectionState();
-}
-
-class _AnswerSectionState extends ConsumerState<AnswerSection> with SingleTickerProviderStateMixin {
-  late final AnimationController _glowController;
-  late final Animation<double> _glowAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _glowAnimation = CurvedAnimation(
-      parent: _glowController,
-      curve: Curves.easeInOut,
-    );
-  }
-
-  @override
-  void dispose() {
-    _glowController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final turn = ref.watch(chatNotifierProvider.select((s) => s.activeTurn));
-    final rawAnswer = turn?.answer ?? '';
     final status = turn?.status;
-    final isInFlight = turn?.isInFlight ?? false;
-
-    final answer = rawAnswer.replaceAllMapped(
-      RegExp(r'\[(\d+)\]'),
-      (match) => '[${match.group(1)}](#citation-${match.group(1)})',
+    final answer = linkifyCitations(
+      turn?.answer ?? '',
+      turn?.sources.length ?? 0,
     );
 
     return Column(
@@ -155,49 +132,22 @@ class _AnswerSectionState extends ConsumerState<AnswerSection> with SingleTicker
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        AnimatedBuilder(
-          animation: _glowAnimation,
-          builder: (context, child) {
-            return Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: isInFlight
-                    ? [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.25 * _glowAnimation.value),
-                          blurRadius: 12 + (8 * _glowAnimation.value),
-                          spreadRadius: 2,
-                        )
-                      ]
-                    : [],
-                border: Border.all(
-                  color: isInFlight
-                      ? Colors.blue.withOpacity(0.4 + (0.4 * _glowAnimation.value))
-                      : Colors.transparent,
-                  width: 1.5,
-                ),
-              ),
-              child: child,
-            );
-          },
+        GlowBorder(
+          active: status == TurnStatus.generating,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (answer.isNotEmpty)
                 MarkdownBody(
                   data: answer,
-                  builders: {
-                    'pre': CodeBlockBuilder(),
-                  },
+                  builders: {'pre': CodeBlockBuilder()},
                   onTapLink: (text, href, title) {
-                    if (href != null && href.startsWith('#citation-')) {
-                      final indexStr = href.replaceFirst('#citation-', '');
-                      final index = int.tryParse(indexStr);
-                      if (index != null) {
-                        ref.read(chatNotifierProvider.notifier).setHighlightedSource(index - 1);
-                      }
+                    if (href == null || !href.startsWith('#citation-')) return;
+                    final n = int.tryParse(href.substring('#citation-'.length));
+                    if (n != null) {
+                      ref
+                          .read(chatNotifierProvider.notifier)
+                          .setHighlightedSource(n - 1);
                     }
                   },
                   styleSheet: MarkdownStyleSheet(
@@ -206,10 +156,10 @@ class _AnswerSectionState extends ConsumerState<AnswerSection> with SingleTicker
                       color: Colors.white70,
                       backgroundColor: Colors.grey.shade900,
                     ),
-                    codeblockDecoration: BoxDecoration(
-                      color: AppColors.cardColor,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                    // Our CodeBlockWidget draws the card, so the package
+                    // must not draw a second one around it.
+                    codeblockDecoration: const BoxDecoration(),
+                    codeblockPadding: EdgeInsets.zero,
                     a: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

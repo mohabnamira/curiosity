@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:curiosity/models/chat_models.dart';
-import 'package:curiosity/providers/chat_provider.dart' hide TurnStatus, Source;
+import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 
 const List<Source> _noSources = <Source>[];
@@ -14,7 +14,11 @@ class SourcesSection extends ConsumerStatefulWidget {
   ConsumerState<SourcesSection> createState() => _SourcesSectionState();
 }
 
-class _SourcesSectionState extends ConsumerState<SourcesSection> with SingleTickerProviderStateMixin {
+class _SourcesSectionState extends ConsumerState<SourcesSection>
+    with SingleTickerProviderStateMixin {
+  static const double _cardWidth = 180;
+  static const double _cardGap = 12;
+
   late final AnimationController _animController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
@@ -38,7 +42,11 @@ class _SourcesSectionState extends ConsumerState<SourcesSection> with SingleTick
       parent: _animController,
       curve: Curves.easeOutCubic,
     ));
-    _animController.forward();
+
+    // Sources may already exist (e.g. reopening an old turn): show instantly.
+    final hasSources =
+        ref.read(chatNotifierProvider).activeTurn?.sources.isNotEmpty ?? false;
+    if (hasSources) _animController.value = 1;
   }
 
   @override
@@ -48,13 +56,22 @@ class _SourcesSectionState extends ConsumerState<SourcesSection> with SingleTick
     super.dispose();
   }
 
-  Future<void> _openSourceUrl(String? urlString) async {
-    if (urlString == null || urlString.trim().isEmpty) return;
-    final Uri? uri = Uri.tryParse(urlString.trim());
-    if (uri == null) return;
+  Future<void> _openSourceUrl(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
+  }
+
+  void _scrollToCard(int? index) {
+    if (index == null || !_scrollController.hasClients) return;
+    final target = index * (_cardWidth + _cardGap);
+    _scrollController.animateTo(
+      target.clamp(0.0, _scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
@@ -69,18 +86,19 @@ class _SourcesSectionState extends ConsumerState<SourcesSection> with SingleTick
       chatNotifierProvider.select((s) => s.highlightedSourceIndex),
     );
 
-    if (highlightedIndex != null && highlightedIndex >= 0 && highlightedIndex < sources.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          final targetOffset = highlightedIndex * 192.0;
-          _scrollController.animateTo(
-            targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        }
-      });
-    }
+    // Play the entrance animation when sources actually arrive.
+    ref.listen<int>(
+      chatNotifierProvider.select((s) => s.activeTurn?.sources.length ?? 0),
+      (prev, next) {
+        if ((prev ?? 0) == 0 && next > 0) _animController.forward(from: 0);
+      },
+    );
+
+    // Scroll only when the highlight changes, not on every rebuild.
+    ref.listen<int?>(
+      chatNotifierProvider.select((s) => s.highlightedSourceIndex),
+      (prev, next) => _scrollToCard(next),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,76 +159,19 @@ class _SourcesSectionState extends ConsumerState<SourcesSection> with SingleTick
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   itemCount: sources.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 12),
+                  separatorBuilder: (_, _) => const SizedBox(width: _cardGap),
                   itemBuilder: (context, index) {
-                    final res = sources[index] as Source;
-                    final isHighlighted = highlightedIndex == index;
-                    return InkWell(
+                    return _SourceCard(
+                      number: index + 1,
+                      source: sources[index],
+                      width: _cardWidth,
+                      isHighlighted: highlightedIndex == index,
                       onTap: () {
-                        ref.read(chatNotifierProvider.notifier).setHighlightedSource(index);
-                        _openSourceUrl(res.url);
+                        ref
+                            .read(chatNotifierProvider.notifier)
+                            .setHighlightedSource(index);
+                        _openSourceUrl(sources[index].url);
                       },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 180,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.cardColor,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isHighlighted ? Colors.blue.shade400 : Colors.grey.shade800,
-                            width: isHighlighted ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade700,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    res.title,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              res.url,
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 11,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
                     );
                   },
                 ),
@@ -218,6 +179,88 @@ class _SourcesSectionState extends ConsumerState<SourcesSection> with SingleTick
             ),
           ),
       ],
+    );
+  }
+}
+
+class _SourceCard extends StatelessWidget {
+  final int number;
+  final Source source;
+  final double width;
+  final bool isHighlighted;
+  final VoidCallback onTap;
+
+  const _SourceCard({
+    required this.number,
+    required this.source,
+    required this.width,
+    required this.isHighlighted,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.cardColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isHighlighted ? Colors.blue.shade400 : Colors.grey.shade800,
+            width: isHighlighted ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade700,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$number',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    source.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              source.url,
+              style: const TextStyle(color: Colors.grey, fontSize: 11),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
