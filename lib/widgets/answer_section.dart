@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:curiosity/models/chat_models.dart';
-import 'package:curiosity/providers/chat_provider.dart' hide TurnStatus;
+import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 
 class CodeBlockWidget extends StatefulWidget {
@@ -105,14 +105,42 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
   }
 }
 
-class AnswerSection extends ConsumerWidget {
+class AnswerSection extends ConsumerStatefulWidget {
   const AnswerSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AnswerSection> createState() => _AnswerSectionState();
+}
+
+class _AnswerSectionState extends ConsumerState<AnswerSection> with SingleTickerProviderStateMixin {
+  late final AnimationController _glowController;
+  late final Animation<double> _glowAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _glowAnimation = CurvedAnimation(
+      parent: _glowController,
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _glowController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final turn = ref.watch(chatNotifierProvider.select((s) => s.activeTurn));
     final rawAnswer = turn?.answer ?? '';
     final status = turn?.status;
+    final isInFlight = turn?.isInFlight ?? false;
 
     final answer = rawAnswer.replaceAllMapped(
       RegExp(r'\[(\d+)\]'),
@@ -127,73 +155,100 @@ class AnswerSection extends ConsumerWidget {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        if (answer.isNotEmpty)
-          MarkdownBody(
-            data: answer,
-            builders: {
-              'pre': CodeBlockBuilder(),
-            },
-            onTapLink: (text, href, title) {
-              if (href != null && href.startsWith('#citation-')) {
-                final indexStr = href.replaceFirst('#citation-', '');
-                final index = int.tryParse(indexStr);
-                if (index != null) {
-                  ref.read(chatNotifierProvider.notifier).setHighlightedSource(index - 1);
-                }
-              }
-            },
-            styleSheet: MarkdownStyleSheet(
-              code: GoogleFonts.firaCode(
-                fontSize: 13,
-                color: Colors.white70,
-                backgroundColor: Colors.grey.shade900,
-              ),
-              codeblockDecoration: BoxDecoration(
-                color: AppColors.cardColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              a: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                backgroundColor: Colors.blue,
-                fontSize: 11,
-              ),
-            ),
-          )
-        else if (turn != null && turn.isInFlight)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16.0),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.submitButton,
-                  ),
+        AnimatedBuilder(
+          animation: _glowAnimation,
+          builder: (context, child) {
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: isInFlight
+                    ? [
+                        BoxShadow(
+                          color: Colors.blue.withOpacity(0.25 * _glowAnimation.value),
+                          blurRadius: 12 + (8 * _glowAnimation.value),
+                          spreadRadius: 2,
+                        )
+                      ]
+                    : [],
+                border: Border.all(
+                  color: isInFlight
+                      ? Colors.blue.withOpacity(0.4 + (0.4 * _glowAnimation.value))
+                      : Colors.transparent,
+                  width: 1.5,
                 ),
-                SizedBox(width: 12),
-                Text(
-                  'Generating answer...',
+              ),
+              child: child,
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (answer.isNotEmpty)
+                MarkdownBody(
+                  data: answer,
+                  builders: {
+                    'pre': CodeBlockBuilder(),
+                  },
+                  onTapLink: (text, href, title) {
+                    if (href != null && href.startsWith('#citation-')) {
+                      final indexStr = href.replaceFirst('#citation-', '');
+                      final index = int.tryParse(indexStr);
+                      if (index != null) {
+                        ref.read(chatNotifierProvider.notifier).setHighlightedSource(index - 1);
+                      }
+                    }
+                  },
+                  styleSheet: MarkdownStyleSheet(
+                    code: GoogleFonts.firaCode(
+                      fontSize: 13,
+                      color: Colors.white70,
+                      backgroundColor: Colors.grey.shade900,
+                    ),
+                    codeblockDecoration: BoxDecoration(
+                      color: AppColors.cardColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    a: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      backgroundColor: Colors.blue,
+                      fontSize: 11,
+                    ),
+                  ),
+                )
+              else if (turn != null && turn.isInFlight)
+                const Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.submitButton,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Generating answer...',
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  ],
+                )
+              else if (status == TurnStatus.done)
+                const Text(
+                  'No answer was generated.',
                   style: TextStyle(color: Colors.grey, fontSize: 14),
                 ),
-              ],
-            ),
-          )
-        else if (status == TurnStatus.done)
-          const Text(
-            'No answer was generated.',
-            style: TextStyle(color: Colors.grey, fontSize: 14),
+              if (status == TurnStatus.error)
+                Text(
+                  'Error: ${turn?.errorMessage ?? "Failed to generate answer"}',
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+                ),
+            ],
           ),
-        if (status == TurnStatus.error)
-          Padding(
-            padding: const EdgeInsets.only(top: 16.0),
-            child: Text(
-              'Error: ${turn?.errorMessage ?? "Failed to generate answer"}',
-              style: const TextStyle(color: Colors.redAccent, fontSize: 14),
-            ),
-          ),
+        ),
       ],
     );
   }
