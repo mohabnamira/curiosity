@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:curiosity/models/chat_models.dart';
-import 'package:curiosity/providers/chat_provider.dart';
+import 'package:curiosity/providers/chat_provider.dart' hide TurnStatus;
 import 'package:curiosity/theme/colors.dart';
 
 class CodeBlockWidget extends StatefulWidget {
@@ -111,8 +111,13 @@ class AnswerSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final turn = ref.watch(chatNotifierProvider.select((s) => s.activeTurn));
-    final answer = turn?.answer ?? '';
+    final rawAnswer = turn?.answer ?? '';
     final status = turn?.status;
+
+    final answer = rawAnswer.replaceAllMapped(
+      RegExp(r'\[(\d+)\]'),
+      (match) => '[${match.group(1)}](#citation-${match.group(1)})',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,6 +133,15 @@ class AnswerSection extends ConsumerWidget {
             builders: {
               'pre': CodeBlockBuilder(),
             },
+            onTapLink: (text, href, title) {
+              if (href != null && href.startsWith('#citation-')) {
+                final indexStr = href.replaceFirst('#citation-', '');
+                final index = int.tryParse(indexStr);
+                if (index != null) {
+                  ref.read(chatNotifierProvider.notifier).setHighlightedSource(index - 1);
+                }
+              }
+            },
             styleSheet: MarkdownStyleSheet(
               code: GoogleFonts.firaCode(
                 fontSize: 13,
@@ -137,6 +151,12 @@ class AnswerSection extends ConsumerWidget {
               codeblockDecoration: BoxDecoration(
                 color: AppColors.cardColor,
                 borderRadius: BorderRadius.circular(10),
+              ),
+              a: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                backgroundColor: Colors.blue,
+                fontSize: 11,
               ),
             ),
           )

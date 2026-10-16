@@ -9,8 +9,13 @@ final chatNotifierProvider =
 class ChatState {
   final List<Turn> turns;
   final String? activeTurnId;
+  final int? highlightedSourceIndex;
 
-  const ChatState({this.turns = const [], this.activeTurnId});
+  const ChatState({
+    this.turns = const [],
+    this.activeTurnId,
+    this.highlightedSourceIndex,
+  });
 
   Turn? get activeTurn {
     if (activeTurnId == null) return null;
@@ -20,10 +25,18 @@ class ChatState {
     return null;
   }
 
-  ChatState copyWith({List<Turn>? turns, String? activeTurnId}) {
+  ChatState copyWith({
+    List<Turn>? turns,
+    String? activeTurnId,
+    int? highlightedSourceIndex,
+    bool clearHighlight = false,
+  }) {
     return ChatState(
       turns: turns ?? this.turns,
       activeTurnId: activeTurnId ?? this.activeTurnId,
+      highlightedSourceIndex: clearHighlight
+          ? null
+          : (highlightedSourceIndex ?? this.highlightedSourceIndex),
     );
   }
 }
@@ -45,14 +58,13 @@ class ChatNotifier extends Notifier<ChatState> {
     return const ChatState();
   }
 
-  /// Adds the turn to state first, then sends. The turn always exists before
-  /// any server reply can arrive, so no event can be lost.
   String sendQuery(String query) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
 
     state = state.copyWith(
       turns: [...state.turns, Turn(id: id, question: query)],
       activeTurnId: id,
+      clearHighlight: true,
     );
 
     ref.read(chatWebServiceProvider).sendChat(id, query).catchError((_) {
@@ -63,7 +75,11 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void setActiveTurn(String id) {
-    state = state.copyWith(activeTurnId: id);
+    state = state.copyWith(activeTurnId: id, clearHighlight: true);
+  }
+
+  void setHighlightedSource(int? index) {
+    state = state.copyWith(highlightedSourceIndex: index);
   }
 
   void _handleMessage(Map<String, dynamic> data) {
