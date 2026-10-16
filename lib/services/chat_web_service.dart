@@ -17,11 +17,8 @@ class ChatWebService {
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionLostController = StreamController<void>.broadcast();
 
-  /// Every decoded server message. Each one carries an `id` so the notifier
-  /// can route it to the right turn.
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
 
-  /// Fires whenever the connection drops, so in-flight turns can be failed.
   Stream<void> get connectionLostStream => _connectionLostController.stream;
 
   void connect() {
@@ -34,9 +31,7 @@ class ChatWebService {
         if (data is Map<String, dynamic>) {
           _messageController.add(data);
         }
-      } catch (_) {
-        // Ignore malformed frames.
-      }
+      } catch (_) {}
     });
 
     _connectionSub = socket.connection.listen((state) {
@@ -46,9 +41,7 @@ class ChatWebService {
     });
   }
 
-  /// Sends a chat request, waiting for the socket to be connected first.
-  /// Throws if the connection isn't ready within 10 seconds.
-  Future<void> sendChat(String id, String query) async {
+  Future<void> sendChat(String id, String query, List<Map<String, String>> history) async {
     final socket = _socket;
     if (socket == null) throw StateError('Socket not created');
 
@@ -63,7 +56,7 @@ class ChatWebService {
       'type': 'chat',
       'id': id,
       'query': query,
-      'history': [],
+      'history': history,
       'focus': 'all',
     }));
   }

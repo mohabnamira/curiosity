@@ -18,13 +18,22 @@ async def send(ws: WebSocket, type_: str, id_: str | None, data=None):
 
 async def handle_chat(ws: WebSocket, body: ChatBody):
     try:
-        sources = await search_service.web_search(body.query)
+        standalone_query = await llm_service.rewrite_query(body.query, body.history)
+        sources = await search_service.web_search(standalone_query)
         await send(ws, "search_results", body.id, [
             {k: s[k] for k in ("index", "title", "url", "snippet")}
             for s in sources
         ])
-        async for text in llm_service.stream_answer(body.query, sources):
+        full_answer = ""
+        async for text in llm_service.stream_answer(standalone_query, sources, body.history):
+            full_answer += text
             await send(ws, "content", body.id, text)
+        try:
+            related_questions = await llm_service.generate_related_questions(standalone_query, full_answer)
+            if related_questions:
+                await send(ws, "related", body.id, related_questions)
+        except Exception:
+            logger.exception("Failed to generate related questions")
         await send(ws, "done", body.id)
     except WebSocketDisconnect:
         raise

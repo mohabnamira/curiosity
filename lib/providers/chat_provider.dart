@@ -61,13 +61,18 @@ class ChatNotifier extends Notifier<ChatState> {
   String sendQuery(String query) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
 
+    final history = state.turns
+        .where((t) => t.status == TurnStatus.done && t.answer.isNotEmpty)
+        .map((t) => {'question': t.question, 'answer': t.answer})
+        .toList();
+
     state = state.copyWith(
       turns: [...state.turns, Turn(id: id, question: query)],
       activeTurnId: id,
       clearHighlight: true,
     );
 
-    ref.read(chatWebServiceProvider).sendChat(id, query).catchError((_) {
+    ref.read(chatWebServiceProvider).sendChat(id, query, history).catchError((_) {
       _failTurn(id, 'Could not reach the server');
     });
 
@@ -110,6 +115,12 @@ class ChatNotifier extends Notifier<ChatState> {
           answer: turn.answer + (data['data']?.toString() ?? ''),
           status: TurnStatus.generating,
         );
+      case 'related':
+        final rawQuestions = data['data'];
+        if (rawQuestions is List) {
+          final questions = rawQuestions.whereType<String>().toList();
+          updated = turn.copyWith(relatedQuestions: questions);
+        }
       case 'done':
         updated = turn.copyWith(status: TurnStatus.done);
       case 'error':

@@ -19,6 +19,7 @@ class Turn {
   final String question;
   final List<Source> sources;
   final String answer;
+  final List<String> relatedQuestions;
   final TurnStatus status;
   final String? errorMessage;
 
@@ -27,11 +28,11 @@ class Turn {
     required this.question,
     this.sources = const [],
     this.answer = '',
+    this.relatedQuestions = const [],
     this.status = TurnStatus.searching,
     this.errorMessage,
   });
 
-  /// True while the server can still send us events for this turn.
   bool get isInFlight =>
       status == TurnStatus.searching || status == TurnStatus.generating;
 
@@ -40,6 +41,7 @@ class Turn {
     String? question,
     List<Source>? sources,
     String? answer,
+    List<String>? relatedQuestions,
     TurnStatus? status,
     String? errorMessage,
   }) {
@@ -48,6 +50,7 @@ class Turn {
       question: question ?? this.question,
       sources: sources ?? this.sources,
       answer: answer ?? this.answer,
+      relatedQuestions: relatedQuestions ?? this.relatedQuestions,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
     );
