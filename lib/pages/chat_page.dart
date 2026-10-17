@@ -1,9 +1,13 @@
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
@@ -154,6 +158,60 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     } catch (_) {}
   }
 
+  Future<void> _copyAnswer(String answer) async {
+    await Clipboard.setData(ClipboardData(text: answer));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Answer copied to clipboard'), duration: Duration(seconds: 1)),
+    );
+  }
+
+  void _exportMarkdown(Turn turn) {
+    final buffer = StringBuffer();
+    buffer.writeln('# Question: ${turn.question}');
+    buffer.writeln();
+    if (turn.sources.isNotEmpty) {
+      buffer.writeln('## Sources');
+      for (int i = 0; i < turn.sources.length; i++) {
+        buffer.writeln('${i + 1}. [${turn.sources[i].title}](${turn.sources[i].url})');
+      }
+      buffer.writeln();
+    }
+    buffer.writeln('## Answer');
+    buffer.writeln(turn.answer);
+
+    final bytes = utf8.encode(buffer.toString());
+    final blob = html.Blob([bytes], 'text/markdown;charset=utf-8');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'curiosity_${turn.id}.md')
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  Future<void> _exportPdf(Turn turn) async {
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) => [
+          pw.Header(level: 0, child: pw.Text('Curiosity Research Report')),
+          pw.Paragraph(text: 'Question: ${turn.question}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          if (turn.sources.isNotEmpty) ...[
+            pw.Text('Sources:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ...turn.sources.asMap().entries.map((entry) => pw.Bullet(text: '${entry.key + 1}. ${entry.value.title} (${entry.value.url})')),
+            pw.SizedBox(height: 10),
+          ],
+          pw.Text('Answer:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.Paragraph(text: turn.answer),
+        ],
+      ),
+    );
+    await Printing.layoutPdf(
+      onLayout: (format) async => doc.save(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatNotifierProvider);
@@ -284,9 +342,31 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      const Text(
-                        'Curiosity',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                      Row(
+                        children: [
+                          const Text(
+                            'Curiosity',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                          ),
+                          const Spacer(),
+                          if (turn.status == TurnStatus.done && turn.answer.isNotEmpty) ...[
+                            IconButton(
+                              icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.grey),
+                              tooltip: 'Copy Answer',
+                              onPressed: () => _copyAnswer(turn.answer),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.code, size: 16, color: Colors.grey),
+                              tooltip: 'Export Markdown',
+                              onPressed: () => _exportMarkdown(turn),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.picture_as_pdf_rounded, size: 16, color: Colors.grey),
+                              tooltip: 'Export PDF',
+                              onPressed: () => _exportPdf(turn),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 8),
                       if (answerText.isNotEmpty)
@@ -332,7 +412,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         const Text('No answer was generated.', style: TextStyle(color: Colors.grey, fontSize: 13))
                       else if (turn.status == TurnStatus.error)
                         Text('Error: ${turn.errorMessage ?? "Failed"}', style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
-                      
+
                       if (turn.status == TurnStatus.done && turn.relatedQuestions.isNotEmpty) ...[
                         const SizedBox(height: 16),
                         Wrap(
