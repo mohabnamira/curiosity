@@ -13,65 +13,58 @@ class GlowBorder extends StatefulWidget {
 
 class _GlowBorderState extends State<GlowBorder>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  );
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    if (widget.active) _controller.repeat(reverse: true);
+    _sync();
   }
 
   @override
   void didUpdateWidget(GlowBorder oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active == oldWidget.active) return;
+    _sync();
+  }
+
+  void _sync() {
     if (widget.active) {
-      _controller.repeat(reverse: true);
+      if (!_c.isAnimating) _c.repeat(reverse: true);
     } else {
-      _controller.stop();
-      _controller.value = 0;
+      _c.stop();
+      _c.value = 0;
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _c.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller,
-      child: Padding(padding: const EdgeInsets.all(16), child: widget.child),
-      builder: (context, child) {
-        final t = Curves.easeInOut.transform(_controller.value);
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: widget.active
-                  ? AppColors.submitButton.withValues(alpha: 0.4 + 0.4 * t)
-                  : Colors.transparent,
-              width: 1.5,
-            ),
-            boxShadow: widget.active
-                ? [
-                    BoxShadow(
-                      color: AppColors.submitButton.withValues(alpha: 0.25 * t),
-                      blurRadius: 12 + 8 * t,
-                      spreadRadius: 2,
-                    ),
-                  ]
-                : const [],
-          ),
-          child: child,
-        );
-      },
+      animation: _c,
+      child: widget.child,
+      builder: (context, child) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: widget.active
+              ? [
+                  BoxShadow(
+                    color: AppColors.submitButton
+                        .withValues(alpha: 0.15 + 0.35 * _c.value),
+                    blurRadius: 6 + 10 * _c.value,
+                  ),
+                ]
+              : const [],
+        ),
+        child: child,
+      ),
     );
   }
 }

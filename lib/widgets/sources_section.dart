@@ -1,3 +1,4 @@
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5,10 +6,10 @@ import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 
-const List<Source> _noSources = <Source>[];
-
 class SourcesSection extends ConsumerStatefulWidget {
-  const SourcesSection({super.key});
+  final Turn turn;
+
+  const SourcesSection({super.key, required this.turn});
 
   @override
   ConsumerState<SourcesSection> createState() => _SourcesSectionState();
@@ -43,10 +44,17 @@ class _SourcesSectionState extends ConsumerState<SourcesSection>
       curve: Curves.easeOutCubic,
     ));
 
-    // Sources may already exist (e.g. reopening an old turn): show instantly.
-    final hasSources =
-        ref.read(chatNotifierProvider).activeTurn?.sources.isNotEmpty ?? false;
-    if (hasSources) _animController.value = 1;
+
+    if (widget.turn.sources.isNotEmpty) _animController.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(SourcesSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.turn.sources.isEmpty && widget.turn.sources.isNotEmpty) {
+      _animController.forward(from: 0);
+    }
   }
 
   @override
@@ -76,28 +84,24 @@ class _SourcesSectionState extends ConsumerState<SourcesSection>
 
   @override
   Widget build(BuildContext context) {
-    final sources = ref.watch(
-      chatNotifierProvider.select((s) => s.activeTurn?.sources ?? _noSources),
+    final sources = widget.turn.sources;
+    final status = widget.turn.status;
+
+
+    final isActive = ref.watch(
+      chatNotifierProvider.select((s) => s.activeTurnId == widget.turn.id),
     );
-    final status = ref.watch(
-      chatNotifierProvider.select((s) => s.activeTurn?.status),
-    );
-    final highlightedIndex = ref.watch(
+    final highlighted = ref.watch(
       chatNotifierProvider.select((s) => s.highlightedSourceIndex),
     );
+    final highlightedIndex = isActive ? highlighted : null;
 
-    // Play the entrance animation when sources actually arrive.
-    ref.listen<int>(
-      chatNotifierProvider.select((s) => s.activeTurn?.sources.length ?? 0),
-      (prev, next) {
-        if ((prev ?? 0) == 0 && next > 0) _animController.forward(from: 0);
-      },
-    );
 
-    // Scroll only when the highlight changes, not on every rebuild.
     ref.listen<int?>(
       chatNotifierProvider.select((s) => s.highlightedSourceIndex),
-      (prev, next) => _scrollToCard(next),
+      (prev, next) {
+        if (isActive) _scrollToCard(next);
+      },
     );
 
     return Column(
@@ -151,29 +155,36 @@ class _SourcesSectionState extends ConsumerState<SourcesSection>
             opacity: _fadeAnimation,
             child: SlideTransition(
               position: _slideAnimation,
-              child: SizedBox(
-                width: double.infinity,
-                height: 100,
-                child: ListView.separated(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  itemCount: sources.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: _cardGap),
-                  itemBuilder: (context, index) {
-                    return _SourceCard(
-                      number: index + 1,
-                      source: sources[index],
-                      width: _cardWidth,
-                      isHighlighted: highlightedIndex == index,
-                      onTap: () {
-                        ref
-                            .read(chatNotifierProvider.notifier)
-                            .setHighlightedSource(index);
-                        _openSourceUrl(sources[index].url);
-                      },
-                    );
-                  },
+
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 100,
+                  child: ListView.separated(
+                    controller: _scrollController,
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    itemCount: sources.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: _cardGap),
+                    itemBuilder: (context, index) {
+                      return _SourceCard(
+                        number: index + 1,
+                        source: sources[index],
+                        width: _cardWidth,
+                        isHighlighted: highlightedIndex == index,
+                        onTap: () {
+                          ref
+                              .read(chatNotifierProvider.notifier)
+                              .setHighlightedSource(index);
+                          _openSourceUrl(sources[index].url);
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

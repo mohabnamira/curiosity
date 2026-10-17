@@ -1,5 +1,5 @@
-import 'dart:convert';
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -9,6 +9,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web/web.dart' as web;
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
@@ -123,11 +124,22 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _queryController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+
+  String? _highlightTurnId;
+  int? _highlightIndex;
+
   @override
   void dispose() {
     _queryController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _highlight(String turnId, int index) {
+    setState(() {
+      _highlightTurnId = turnId;
+      _highlightIndex = index;
+    });
   }
 
   void _scrollToBottom() {
@@ -147,7 +159,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (query.isEmpty) return;
     _queryController.clear();
     ref.read(chatNotifierProvider.notifier).sendQuery(query);
-    _scrollToBottom();
   }
 
   Future<void> _openSourceUrl(String url) async {
@@ -180,26 +191,43 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     buffer.writeln('## Answer');
     buffer.writeln(turn.answer);
 
-    final bytes = utf8.encode(buffer.toString());
-    final blob = html.Blob([bytes], 'text/markdown;charset=utf-8');
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    html.AnchorElement(href: url)
-      ..setAttribute('download', 'curiosity_${turn.id}.md')
-      ..click();
-    html.Url.revokeObjectUrl(url);
+    final blob = web.Blob(
+      [buffer.toString().toJS].toJS,
+      web.BlobPropertyBag(type: 'text/markdown;charset=utf-8'),
+    );
+    final url = web.URL.createObjectURL(blob);
+    final link = web.HTMLAnchorElement()
+      ..href = url
+      ..download = 'curiosity_${turn.id}.md';
+    link.click();
+    web.URL.revokeObjectURL(url);
   }
 
   Future<void> _exportPdf(Turn turn) async {
-    final doc = pw.Document();
+
+    pw.ThemeData? theme;
+    try {
+      theme = pw.ThemeData.withFont(
+        base: await PdfGoogleFonts.notoSansRegular(),
+        bold: await PdfGoogleFonts.notoSansBold(),
+      );
+    } catch (_) {}
+
+    final doc = pw.Document(theme: theme);
     doc.addPage(
       pw.MultiPage(
         build: (context) => [
           pw.Header(level: 0, child: pw.Text('Curiosity Research Report')),
-          pw.Paragraph(text: 'Question: ${turn.question}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          pw.Paragraph(
+            text: 'Question: ${turn.question}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
           pw.SizedBox(height: 10),
           if (turn.sources.isNotEmpty) ...[
             pw.Text('Sources:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            ...turn.sources.asMap().entries.map((entry) => pw.Bullet(text: '${entry.key + 1}. ${entry.value.title} (${entry.value.url})')),
+            ...turn.sources.asMap().entries.map(
+                  (e) => pw.Bullet(text: '${e.key + 1}. ${e.value.title} (${e.value.url})'),
+                ),
             pw.SizedBox(height: 10),
           ],
           pw.Text('Answer:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
@@ -207,18 +235,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ],
       ),
     );
-    await Printing.layoutPdf(
-      onLayout: (format) async => doc.save(),
+
+    await Printing.sharePdf(
+      bytes: await doc.save(),
+      filename: 'curiosity_${turn.id}.pdf',
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final chatState = ref.watch(chatNotifierProvider);
-    final turns = chatState.turns;
+    final turns = ref.watch(chatNotifierProvider.select((s) => s.turns));
     final hasInFlight = turns.any((t) => t.isInFlight);
 
-    ref.listen(chatNotifierProvider, (_, __) => _scrollToBottom());
+    // Scroll when a turn is added, not on every streamed chunk.
+    ref.listen(
+      chatNotifierProvider.select((s) => s.turns.length),
+      (_, _) => _scrollToBottom(),
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -241,7 +274,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               itemBuilder: (context, index) {
                 final turn = turns[index];
                 final answerText = linkifyCitations(turn.answer, turn.sources.length);
-                final isHighlighted = chatState.highlightedSourceIndex;
+                final highlightedIndex = _highlightTurnId == turn.id ? _highlightIndex : null;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 32.0),
@@ -279,52 +312,58 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         const SizedBox(height: 8),
                         SizedBox(
                           height: 80,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: turn.sources.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 8),
-                            itemBuilder: (context, sIndex) {
-                              final source = turn.sources[sIndex];
-                              final highlighted = isHighlighted == sIndex;
-                              return InkWell(
-                                onTap: () {
-                                  ref.read(chatNotifierProvider.notifier).setHighlightedSource(sIndex);
-                                  _openSourceUrl(source.url);
-                                },
-                                borderRadius: BorderRadius.circular(6),
-                                child: Container(
-                                  width: 160,
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cardColor,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: highlighted ? Colors.blue.shade400 : Colors.grey.shade800,
-                                      width: highlighted ? 2 : 1,
+
+                          child: ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context).copyWith(
+                              dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+                            ),
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: turn.sources.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 8),
+                              itemBuilder: (context, sIndex) {
+                                final source = turn.sources[sIndex];
+                                final highlighted = highlightedIndex == sIndex;
+                                return InkWell(
+                                  onTap: () {
+                                    _highlight(turn.id, sIndex);
+                                    _openSourceUrl(source.url);
+                                  },
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Container(
+                                    width: 160,
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cardColor,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                        color: highlighted ? Colors.blue.shade400 : Colors.grey.shade800,
+                                        width: highlighted ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '${sIndex + 1}. ${source.title}',
+                                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          source.url,
+                                          style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        '${sIndex + 1}.${source.title}',
-                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        source.url,
-                                        style: const TextStyle(color: Colors.grey, fontSize: 10),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -376,9 +415,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           onTapLink: (text, href, title) {
                             if (href == null || !href.startsWith('#citation-')) return;
                             final n = int.tryParse(href.substring('#citation-'.length));
-                            if (n != null) {
-                              ref.read(chatNotifierProvider.notifier).setHighlightedSource(n - 1);
-                            }
+                            if (n != null) _highlight(turn.id, n - 1);
                           },
                           styleSheet: MarkdownStyleSheet(
                             code: GoogleFonts.firaCode(
@@ -423,10 +460,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               backgroundColor: AppColors.cardColor,
                               side: BorderSide(color: Colors.grey.shade800),
                               label: Text(q, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                              onPressed: () {
-                                ref.read(chatNotifierProvider.notifier).sendQuery(q);
-                                _scrollToBottom();
-                              },
+                              onPressed: () => ref.read(chatNotifierProvider.notifier).sendQuery(q),
                             );
                           }).toList(),
                         ),

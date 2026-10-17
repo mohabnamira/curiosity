@@ -76,15 +76,26 @@ class _SideBarState extends ConsumerState<SideBar> {
                             ),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 18),
-                              onPressed: () {
-                                ref.read(chatNotifierProvider.notifier).deleteThread(thread.id);
+                              onPressed: () async {
+                                final wasActive = isSelected;
+                                await ref
+                                    .read(chatNotifierProvider.notifier)
+                                    .deleteThread(thread.id);
+
+                                if (wasActive && context.mounted) {
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(builder: (_) => const HomePage()),
+                                    (route) => false,
+                                  );
+                                }
                               },
                             ),
                             onTap: () {
                               ref.read(chatNotifierProvider.notifier).loadThread(thread.id);
-                              Navigator.pop(context);
-                              Navigator.of(context).push(
+
+                              Navigator.of(context).pushAndRemoveUntil(
                                 MaterialPageRoute(builder: (_) => const ChatPage()),
+                                (route) => route.isFirst,
                               );
                             },
                           );

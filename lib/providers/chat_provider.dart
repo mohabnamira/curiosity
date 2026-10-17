@@ -56,6 +56,9 @@ class ChatState {
 
 class ChatNotifier extends Notifier<ChatState> {
   static const String _storageKey = 'curiosity_chat_threads_v1';
+  static const int _maxHistoryTurns = 3;
+
+  static const int _maxThreads = 50;
 
   @override
   ChatState build() {
@@ -135,8 +138,13 @@ class ChatNotifier extends Notifier<ChatState> {
   String sendQuery(String query) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
 
-    final history = state.turns
+    final finished = state.turns
         .where((t) => t.status == TurnStatus.done && t.answer.isNotEmpty)
+        .toList();
+    final recent = finished.length > _maxHistoryTurns
+        ? finished.sublist(finished.length - _maxHistoryTurns)
+        : finished;
+    final history = recent
         .map((t) => {'question': t.question, 'answer': t.answer})
         .toList();
 
@@ -213,35 +221,28 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void _persistCurrentConversation() {
-    if (state.turns.isEmpty) return;
-    final firstTurn = state.turns.first;
-    final title = firstTurn.question.length > 30
-        ? '${firstTurn.question.substring(0, 30)}...'
-        : firstTurn.question;
+
+    final finished = state.turns.where((t) => !t.isInFlight).toList();
+    if (finished.isEmpty) return;
+    final firstQuestion = finished.first.question;
+    final title = firstQuestion.length > 30
+        ? '${firstQuestion.substring(0, 30)}...'
+        : firstQuestion;
 
     final threadId = state.activeThreadId ?? DateTime.now().microsecondsSinceEpoch.toString();
     final thread = ChatThread(
       id: threadId,
       title: title,
-      turns: state.turns,
+      turns: finished,
       updatedAt: DateTime.now(),
     );
 
-    final existingIndex = state.savedThreads.indexWhere((t) => t.id == threadId);
-    List<ChatThread> updatedThreads;
-    if (existingIndex >= 0) {
-      updatedThreads = [
-        for (int i = 0; i < state.savedThreads.length; i++)
-          if (i == existingIndex) thread else state.savedThreads[i]
-      ];
-    } else {
-      updatedThreads = [thread, ...state.savedThreads];
-    }
-
-    updatedThreads.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final others = state.savedThreads.where((t) => t.id != threadId);
+    final updatedThreads = [thread, ...others]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     state = state.copyWith(
-      savedThreads: updatedThreads,
+      savedThreads: updatedThreads.take(_maxThreads).toList(),
       activeThreadId: threadId,
     );
     _saveThreads();
