@@ -1,51 +1,398 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:markdown/markdown.dart' as md;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
-import 'package:curiosity/widgets/answer_section.dart';
-import 'package:curiosity/widgets/side_bar.dart';
-import 'package:curiosity/widgets/sources_section.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:curiosity/widgets/glow_border.dart';
 
-class ChatPage extends ConsumerWidget {
+final _codeOrCitation = RegExp(r'(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[(\d+)\](?!\()');
+
+String linkifyCitations(String text, int sourceCount) {
+  return text.replaceAllMapped(_codeOrCitation, (m) {
+    if (m.group(1) != null) return m.group(0)!;
+    final n = int.tryParse(m.group(2)!);
+    if (n == null || n < 1 || n > sourceCount) return m.group(0)!;
+    return '[$n](#citation-$n)';
+  });
+}
+
+class CodeBlockWidget extends StatefulWidget {
+  final String code;
+
+  const CodeBlockWidget({super.key, required this.code});
+
+  @override
+  State<CodeBlockWidget> createState() => _CodeBlockWidgetState();
+}
+
+class _CodeBlockWidgetState extends State<CodeBlockWidget> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.code));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _copied ? Colors.greenAccent : Colors.grey.shade400;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.cardColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade800),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade900,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                InkWell(
+                  onTap: _copy,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _copied ? Icons.check : Icons.copy_rounded,
+                        size: 14,
+                        color: color,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _copied ? 'Copied' : 'Copy',
+                        style: TextStyle(fontSize: 12, color: color),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Text(
+                widget.code,
+                style: GoogleFonts.firaCode(fontSize: 13, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CodeBlockBuilder extends MarkdownElementBuilder {
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    return CodeBlockWidget(code: element.textContent.trimRight());
+  }
+}
+
+class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final question = ref.watch(
-      chatNotifierProvider.select((s) => s.activeTurn?.question ?? ''),
-    );
+  ConsumerState<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends ConsumerState<ChatPage> {
+  final TextEditingController _queryController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _submit() {
+    final query = _queryController.text.trim();
+    if (query.isEmpty) return;
+    _queryController.clear();
+    ref.read(chatNotifierProvider.notifier).sendQuery(query);
+    _scrollToBottom();
+  }
+
+  Future<void> _openSourceUrl(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chatState = ref.watch(chatNotifierProvider);
+    final turns = chatState.turns;
+    final hasInFlight = turns.any((t) => t.isInFlight);
+
+    ref.listen(chatNotifierProvider, (_, __) => _scrollToBottom());
 
     return Scaffold(
-      body: Row(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        title: Text(
+          'Curiosity',
+          style: GoogleFonts.ibmPlexMono(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Column(
         children: [
-          const SideBar(),
-          const SizedBox(width: 100),
           Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: turns.length,
+              itemBuilder: (context, index) {
+                final turn = turns[index];
+                final answerText = linkifyCitations(turn.answer, turn.sources.length);
+                final isHighlighted = chatState.highlightedSourceIndex;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 32.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardColor,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade800),
+                        ),
+                        child: Text(
+                          turn.question,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (turn.sources.isNotEmpty) ...[
+                        const Row(
+                          children: [
+                            Icon(Icons.source_outlined, color: Colors.white70, size: 16),
+                            SizedBox(width: 8),
+                            Text(
+                              'Sources',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 80,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: turn.sources.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (context, sIndex) {
+                              final source = turn.sources[sIndex];
+                              final highlighted = isHighlighted == sIndex;
+                              return InkWell(
+                                onTap: () {
+                                  ref.read(chatNotifierProvider.notifier).setHighlightedSource(sIndex);
+                                  _openSourceUrl(source.url);
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  width: 160,
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cardColor,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: highlighted ? Colors.blue.shade400 : Colors.grey.shade800,
+                                      width: highlighted ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${sIndex + 1}.${source.title}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        source.url,
+                                        style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ] else if (turn.status == TurnStatus.searching) ...[
+                        const Row(
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.submitButton),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Searching web sources...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      const Text(
+                        'Curiosity',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 8),
+                      if (answerText.isNotEmpty)
+                        MarkdownBody(
+                          data: answerText,
+                          builders: {'pre': CodeBlockBuilder()},
+                          onTapLink: (text, href, title) {
+                            if (href == null || !href.startsWith('#citation-')) return;
+                            final n = int.tryParse(href.substring('#citation-'.length));
+                            if (n != null) {
+                              ref.read(chatNotifierProvider.notifier).setHighlightedSource(n - 1);
+                            }
+                          },
+                          styleSheet: MarkdownStyleSheet(
+                            code: GoogleFonts.firaCode(
+                              fontSize: 13,
+                              color: Colors.white70,
+                              backgroundColor: Colors.grey.shade900,
+                            ),
+                            codeblockDecoration: const BoxDecoration(),
+                            codeblockPadding: EdgeInsets.zero,
+                            a: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              backgroundColor: Colors.blue,
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                      else if (turn.isInFlight)
+                        const Row(
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.submitButton),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Generating answer...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                          ],
+                        )
+                      else if (turn.status == TurnStatus.done)
+                        const Text('No answer was generated.', style: TextStyle(color: Colors.grey, fontSize: 13))
+                      else if (turn.status == TurnStatus.error)
+                        Text('Error: ${turn.errorMessage ?? "Failed"}', style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                      
+                      if (turn.status == TurnStatus.done && turn.relatedQuestions.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: turn.relatedQuestions.map((q) {
+                            return ActionChip(
+                              backgroundColor: AppColors.cardColor,
+                              side: BorderSide(color: Colors.grey.shade800),
+                              label: Text(q, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              onPressed: () {
+                                ref.read(chatNotifierProvider.notifier).sendQuery(q);
+                                _scrollToBottom();
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: AppColors.sideNav,
+            child: GlowBorder(
+              active: hasInFlight,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.searchBar,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.searchBarBorder, width: 1.5),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      question,
-                      style: const TextStyle(
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: TextField(
+                          controller: _queryController,
+                          onSubmitted: (_) => _submit(),
+                          decoration: const InputDecoration(
+                            hintText: 'Ask a follow-up...',
+                            hintStyle: TextStyle(color: AppColors.textGrey, fontSize: 15),
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    const SourcesSection(),
-                    const SizedBox(height: 24),
-                    const AnswerSection(),
+                    IconButton(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.arrow_forward, color: AppColors.submitButton),
+                    ),
                   ],
                 ),
               ),
             ),
-          ),
-          const Placeholder(
-            strokeWidth: 0,
-            color: AppColors.background,
           ),
         ],
       ),
