@@ -1,16 +1,105 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:curiosity/pages/chat_page.dart';
+import 'package:curiosity/pages/home_pages.dart';
+import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/side_bar_button.dart';
 
-class SideBar extends StatefulWidget {
+class SideBar extends ConsumerStatefulWidget {
   const SideBar({super.key});
 
   @override
-  State<SideBar> createState() => _SideBarState();
+  ConsumerState<SideBar> createState() => _SideBarState();
 }
 
-class _SideBarState extends State<SideBar> {
+class _SideBarState extends ConsumerState<SideBar> {
   bool isCollapsed = true;
+
+  void _showLibraryDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final chatState = ref.watch(chatNotifierProvider);
+            final threads = chatState.savedThreads;
+
+            return Container(
+              padding: const EdgeInsets.all(24),
+              height: 400,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Library - Saved Conversations',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (threads.isEmpty)
+                    const Expanded(
+                      child: Center(
+                        child: Text(
+                          'No saved conversations yet.',
+                          style: TextStyle(color: Colors.grey, fontSize: 14),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: threads.length,
+                        itemBuilder: (context, index) {
+                          final thread = threads[index];
+                          final isSelected = chatState.activeThreadId == thread.id;
+                          return ListTile(
+                            title: Text(
+                              thread.title,
+                              style: TextStyle(
+                                color: isSelected ? Colors.blue.shade400 : Colors.white,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '${thread.turns.length} turn(s)',
+                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 18),
+                              onPressed: () {
+                                ref.read(chatNotifierProvider.notifier).deleteThread(thread.id);
+                              },
+                            ),
+                            onTap: () {
+                              ref.read(chatNotifierProvider.notifier).loadThread(thread.id);
+                              Navigator.pop(context);
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const ChatPage()),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
@@ -30,11 +119,23 @@ class _SideBarState extends State<SideBar> {
             ),
           ),
           const SizedBox(height: 24),
-          SideBarButton(isCollapsed: isCollapsed, icon: Icons.add, text: 'Home'),
+          GestureDetector(
+            onTap: () {
+              ref.read(chatNotifierProvider.notifier).startNewChat();
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const HomePage()),
+                (route) => false,
+              );
+            },
+            child: SideBarButton(isCollapsed: isCollapsed, icon: Icons.add, text: 'Home'),
+          ),
           SideBarButton(isCollapsed: isCollapsed, icon: Icons.search, text: 'Search'),
           SideBarButton(isCollapsed: isCollapsed, icon: Icons.language, text: 'Space'),
           SideBarButton(isCollapsed: isCollapsed, icon: Icons.auto_awesome, text: 'Discover'),
-          SideBarButton(isCollapsed: isCollapsed, icon: Icons.cloud_outlined, text: 'Library'),
+          GestureDetector(
+            onTap: () => _showLibraryDialog(context),
+            child: SideBarButton(isCollapsed: isCollapsed, icon: Icons.cloud_outlined, text: 'Library'),
+          ),
           const Spacer(),
           GestureDetector(
             onTap: () {

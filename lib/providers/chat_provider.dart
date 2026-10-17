@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/services/chat_web_service.dart';
 
@@ -7,11 +9,15 @@ final chatNotifierProvider =
     NotifierProvider<ChatNotifier, ChatState>(ChatNotifier.new);
 
 class ChatState {
+  final List<ChatThread> savedThreads;
+  final String? activeThreadId;
   final List<Turn> turns;
   final String? activeTurnId;
   final int? highlightedSourceIndex;
 
   const ChatState({
+    this.savedThreads = const [],
+    this.activeThreadId,
     this.turns = const [],
     this.activeTurnId,
     this.highlightedSourceIndex,
@@ -26,12 +32,19 @@ class ChatState {
   }
 
   ChatState copyWith({
+    List<ChatThread>? savedThreads,
+    String? activeThreadId,
     List<Turn>? turns,
     String? activeTurnId,
     int? highlightedSourceIndex,
+    bool clearActiveThread = false,
     bool clearHighlight = false,
   }) {
     return ChatState(
+      savedThreads: savedThreads ?? this.savedThreads,
+      activeThreadId: clearActiveThread
+          ? null
+          : (activeThreadId ?? this.activeThreadId),
       turns: turns ?? this.turns,
       activeTurnId: activeTurnId ?? this.activeTurnId,
       highlightedSourceIndex: clearHighlight
@@ -42,6 +55,8 @@ class ChatState {
 }
 
 class ChatNotifier extends Notifier<ChatState> {
+  static const String _storageKey = 'curiosity_chat_threads_v1';
+
   @override
   ChatState build() {
     final webService = ref.watch(chatWebServiceProvider);
@@ -55,7 +70,66 @@ class ChatNotifier extends Notifier<ChatState> {
       lostSub.cancel();
     });
 
+    _loadThreads();
+
     return const ChatState();
+  }
+
+  Future<void> _loadThreads() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_storageKey);
+      if (raw != null) {
+        final threads = raw
+            .map((str) => ChatThread.fromJson(json.decode(str)))
+            .toList();
+        threads.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        state = state.copyWith(savedThreads: threads);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveThreads() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = state.savedThreads
+          .map((thread) => json.encode(thread.toJson()))
+          .toList();
+      await prefs.setStringList(_storageKey, raw);
+    } catch (_) {}
+  }
+
+  void startNewChat() {
+    state = state.copyWith(
+      turns: [],
+      activeTurnId: null,
+      clearActiveThread: true,
+      clearHighlight: true,
+    );
+  }
+
+  void loadThread(String threadId) {
+    final thread = state.savedThreads.firstWhere(
+      (t) => t.id == threadId,
+      orElse: () => ChatThread(id: '', title: '', turns: [], updatedAt: DateTime.now()),
+    );
+    if (thread.id.isEmpty) return;
+
+    state = state.copyWith(
+      activeThreadId: thread.id,
+      turns: thread.turns,
+      activeTurnId: thread.turns.isNotEmpty ? thread.turns.last.id : null,
+      clearHighlight: true,
+    );
+  }
+
+  Future<void> deleteThread(String threadId) async {
+    final updated = state.savedThreads.where((t) => t.id != threadId).toList();
+    state = state.copyWith(savedThreads: updated);
+    await _saveThreads();
+    if (state.activeThreadId == threadId) {
+      startNewChat();
+    }
   }
 
   String sendQuery(String query) {
@@ -130,7 +204,47 @@ class ChatNotifier extends Notifier<ChatState> {
         );
     }
 
-    if (updated != null) _replaceTurn(updated);
+    if (updated != null) {
+      _replaceTurn(updated);
+      if (updated.status == TurnStatus.done) {
+        _persistCurrentConversation();
+      }
+    }
+  }
+
+  void _persistCurrentConversation() {
+    if (state.turns.isEmpty) return;
+    final firstTurn = state.turns.first;
+    final title = firstTurn.question.length > 30
+        ? '${firstTurn.question.substring(0, 30)}...'
+        : firstTurn.question;
+
+    final threadId = state.activeThreadId ?? DateTime.now().microsecondsSinceEpoch.toString();
+    final thread = ChatThread(
+      id: threadId,
+      title: title,
+      turns: state.turns,
+      updatedAt: DateTime.now(),
+    );
+
+    final existingIndex = state.savedThreads.indexWhere((t) => t.id == threadId);
+    List<ChatThread> updatedThreads;
+    if (existingIndex >= 0) {
+      updatedThreads = [
+        for (int i = 0; i < state.savedThreads.length; i++)
+          if (i == existingIndex) thread else state.savedThreads[i]
+      ];
+    } else {
+      updatedThreads = [thread, ...state.savedThreads];
+    }
+
+    updatedThreads.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    state = state.copyWith(
+      savedThreads: updatedThreads,
+      activeThreadId: threadId,
+    );
+    _saveThreads();
   }
 
   void _failTurn(String id, String message) {
