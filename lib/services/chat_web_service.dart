@@ -1,7 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_client/web_socket_client.dart';
+
+
+const String _serverUrl = String.fromEnvironment(
+  'SERVER_URL',
+  defaultValue: 'localhost:8000',
+);
+
+enum ConnectionStatus { connecting, connected, reconnecting, disconnected }
 
 final chatWebServiceProvider = Provider<ChatWebService>((ref) {
   final service = ChatWebService()..connect();
@@ -17,12 +26,24 @@ class ChatWebService {
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionLostController = StreamController<void>.broadcast();
 
+
+  final ValueNotifier<ConnectionStatus> status =
+      ValueNotifier(ConnectionStatus.connecting);
+
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
 
   Stream<void> get connectionLostStream => _connectionLostController.stream;
 
+  Uri _buildUri() {
+    final base = _serverUrl.contains('://') ? _serverUrl : 'ws://$_serverUrl';
+    return Uri.parse('$base/ws/chat');
+  }
+
   void connect() {
-    final socket = WebSocket(Uri.parse('ws://localhost:8000/ws/chat'));
+    final socket = WebSocket(
+      _buildUri(),
+      backoff: ConstantBackoff(const Duration(seconds: 2)),
+    );
     _socket = socket;
 
     _messageSub = socket.messages.listen((message) {
@@ -35,8 +56,16 @@ class ChatWebService {
     });
 
     _connectionSub = socket.connection.listen((state) {
-      if (state is Reconnecting || state is Disconnected) {
+      if (state is Connected || state is Reconnected) {
+        status.value = ConnectionStatus.connected;
+      } else if (state is Reconnecting) {
+        status.value = ConnectionStatus.reconnecting;
         _connectionLostController.add(null);
+      } else if (state is Disconnected) {
+        status.value = ConnectionStatus.disconnected;
+        _connectionLostController.add(null);
+      } else if (state is Connecting) {
+        status.value = ConnectionStatus.connecting;
       }
     });
   }
@@ -67,5 +96,6 @@ class ChatWebService {
     _socket?.close();
     _messageController.close();
     _connectionLostController.close();
+    status.dispose();
   }
 }
