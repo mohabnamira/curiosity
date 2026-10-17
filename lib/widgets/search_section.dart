@@ -34,6 +34,13 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
 
   @override
   Widget build(BuildContext context) {
+    final currentFocus = ref.watch(chatNotifierProvider.select((s) => s.focus));
+    final focusLabel = switch (currentFocus) {
+      'academic' => 'Academic',
+      'youtube' => 'YouTube',
+      _ => 'All',
+    };
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -78,9 +85,41 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
                 padding: const EdgeInsets.all(10.0),
                 child: Row(
                   children: [
-                    const SearchBarButton(
-                      icon: Icons.auto_awesome_outlined,
-                      text: 'Focus',
+                    PopupMenuButton<String>(
+                      onSelected: (val) {
+                        ref.read(chatNotifierProvider.notifier).setFocus(val);
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'all',
+                          child: DefaultTextStyle(
+                            style: TextStyle(color: Colors.white, fontSize: 14),
+                            child: Text('All'),
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'academic',
+                          child: DefaultTextStyle(
+                            style: TextStyle(color: Colors.white, fontSize: 14),
+                            child: Text('Academic'),
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'youtube',
+                          child: DefaultTextStyle(
+                            style: TextStyle(color: Colors.white, fontSize: 14),
+                            child: Text('YouTube'),
+                          ),
+                        ),
+                      ],
+                      color: AppColors.cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SearchBarButton(
+                        icon: Icons.auto_awesome_outlined,
+                        text: 'Focus: $focusLabel',
+                      ),
                     ),
                     const SizedBox(width: 12),
                     const SearchBarButton(

@@ -41,7 +41,7 @@ class ChatWebService {
     });
   }
 
-  Future<void> sendChat(String id, String query, List<Map<String, String>> history) async {
+  Future<void> sendChat(String id, String query, List<Map<String, String>> history, String focus) async {
     final socket = _socket;
     if (socket == null) throw StateError('Socket not created');
 
@@ -57,7 +57,7 @@ class ChatWebService {
       'id': id,
       'query': query,
       'history': history,
-      'focus': 'all',
+      'focus': focus,
     }));
   }
 

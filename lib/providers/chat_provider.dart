@@ -14,6 +14,7 @@ class ChatState {
   final List<Turn> turns;
   final String? activeTurnId;
   final int? highlightedSourceIndex;
+  final String focus;
 
   const ChatState({
     this.savedThreads = const [],
@@ -21,6 +22,7 @@ class ChatState {
     this.turns = const [],
     this.activeTurnId,
     this.highlightedSourceIndex,
+    this.focus = 'all',
   });
 
   Turn? get activeTurn {
@@ -37,6 +39,7 @@ class ChatState {
     List<Turn>? turns,
     String? activeTurnId,
     int? highlightedSourceIndex,
+    String? focus,
     bool clearActiveThread = false,
     bool clearHighlight = false,
   }) {
@@ -50,6 +53,7 @@ class ChatState {
       highlightedSourceIndex: clearHighlight
           ? null
           : (highlightedSourceIndex ?? this.highlightedSourceIndex),
+      focus: focus ?? this.focus,
     );
   }
 }
@@ -135,6 +139,10 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
+  void setFocus(String focus) {
+    state = state.copyWith(focus: focus);
+  }
+
   String sendQuery(String query) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
 
@@ -154,7 +162,7 @@ class ChatNotifier extends Notifier<ChatState> {
       clearHighlight: true,
     );
 
-    ref.read(chatWebServiceProvider).sendChat(id, query, history).catchError((_) {
+    ref.read(chatWebServiceProvider).sendChat(id, query, history, state.focus).catchError((_) {
       _failTurn(id, 'Could not reach the server');
     });
 
@@ -221,7 +229,6 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void _persistCurrentConversation() {
-
     final finished = state.turns.where((t) => !t.isInFlight).toList();
     if (finished.isEmpty) return;
     final firstQuestion = finished.first.question;

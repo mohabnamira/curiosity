@@ -20,7 +20,7 @@ async def send(ws: WebSocket, type_: str, id_: str | None, data=None):
 async def handle_chat(ws: WebSocket, body: ChatBody):
     try:
         standalone_query = await llm_service.rewrite_query(body.query, body.history)
-        sources = await search_service.web_search(standalone_query)
+        sources = await search_service.web_search(standalone_query, focus=body.focus)
         await send(ws, "search_results", body.id, [
             {k: s[k] for k in ("index", "title", "url", "snippet")}
             for s in sources

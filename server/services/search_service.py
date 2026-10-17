@@ -23,8 +23,27 @@ def chunk_text(text: str, max_chars: int = MAX_CHARS_PER_SOURCE) -> str:
 
 
 class SearchService:
-    async def web_search(self, query: str, max_results: int = 5):
-        response = await tavily_client.search(query, max_results=max_results)
+    async def web_search(self, query: str, focus: str = "all", max_results: int = 5):
+        include_domains = None
+        if focus == "academic":
+            include_domains = [
+                "arxiv.org",
+                "scholar.google.com",
+                "researchgate.net",
+                "ncbi.nlm.nih.gov",
+                "jstor.org",
+                "sciencedirect.com",
+                "springer.com",
+                "ieee.org",
+            ]
+        elif focus == "youtube":
+            include_domains = ["youtube.com", "youtu.be"]
+
+        search_args = {"query": query, "max_results": max_results}
+        if include_domains:
+            search_args["include_domains"] = include_domains
+
+        response = await tavily_client.search(**search_args)
         items = response.get("results", [])
 
         async with httpx.AsyncClient(
