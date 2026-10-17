@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -29,11 +30,14 @@ async def handle_chat(ws: WebSocket, body: ChatBody):
             full_answer += text
             await send(ws, "content", body.id, text)
         try:
-            related_questions = await llm_service.generate_related_questions(standalone_query, full_answer)
-            if related_questions:
-                await send(ws, "related", body.id, related_questions)
+            related = await asyncio.wait_for(
+                llm_service.generate_related_questions(standalone_query, full_answer),
+                timeout=8,
+            )
+            if related:
+                await send(ws, "related", body.id, related)
         except Exception:
-            logger.exception("Failed to generate related questions")
+            logger.exception("related questions failed")
         await send(ws, "done", body.id)
     except WebSocketDisconnect:
         raise
