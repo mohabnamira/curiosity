@@ -3,18 +3,67 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/glow_border.dart';
 
-/// Matches code (fenced or inline) OR a citation like [3].
-/// Code is matched first so we can leave it untouched.
+final ttsServiceProvider = Provider<TtsService>((ref) {
+  final service = TtsService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+class TtsService {
+  final FlutterTts _tts = FlutterTts();
+  bool isPlaying = false;
+
+  TtsService() {
+    _tts.setCompletionHandler(() {
+      isPlaying = false;
+    });
+    _tts.setErrorHandler((msg) {
+      isPlaying = false;
+    });
+  }
+
+  String cleanText(String text) {
+    var cleaned = text.replaceAll(RegExp(r'\[\d+\]'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'```[\s\S]*?```'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'`[^`]*`'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'[#*_~>]+'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^\s*[-*•]\s*', multiLine: true), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^\s*\d+[.)]\s*', multiLine: true), '');
+    return cleaned.trim();
+  }
+
+  Future<void> speak(String text) async {
+    if (isPlaying) {
+      await stop();
+      return;
+    }
+    final plain = cleanText(text);
+    if (plain.isEmpty) return;
+    isPlaying = true;
+    await _tts.speak(plain);
+  }
+
+  Future<void> stop() async {
+    isPlaying = false;
+    await _tts.stop();
+  }
+
+  void dispose() {
+    _tts.stop();
+  }
+}
+
+
 final _codeOrCitation = RegExp(r'(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[(\d+)\](?!\()');
 
-/// Turns valid [n] citations into markdown links "[n](#citation-n)".
-/// Citations inside code, or without a matching source, stay as plain text.
+
 String linkifyCitations(String text, int sourceCount) {
   return text.replaceAllMapped(_codeOrCitation, (m) {
     if (m.group(1) != null) return m.group(0)!; // code: leave as is
@@ -119,17 +168,38 @@ class AnswerSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final turn = ref.watch(chatNotifierProvider.select((s) => s.activeTurn));
     final status = turn?.status;
+    final answerText = turn?.answer ?? '';
     final answer = linkifyCitations(
-      turn?.answer ?? '',
+      answerText,
       turn?.sources.length ?? 0,
     );
+    final ttsService = ref.watch(ttsServiceProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Curiosity',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Row(
+          children: [
+            const Text(
+              'Curiosity',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            if (status == TurnStatus.done && answerText.isNotEmpty)
+              IconButton(
+                icon: Icon(
+                  ttsService.isPlaying ? Icons.stop_rounded : Icons.volume_up_rounded,
+                  size: 20,
+                  color: AppColors.textGrey,
+                ),
+                tooltip: ttsService.isPlaying ? 'Stop listening' : 'Listen to answer',
+                onPressed: () async {
+                  await ttsService.speak(answerText);
+                  // Trigger rebuild to update icon state
+                  (context as Element).markNeedsBuild();
+                },
+              ),
+          ],
         ),
         const SizedBox(height: 12),
         GlowBorder(
@@ -156,8 +226,6 @@ class AnswerSection extends ConsumerWidget {
                       color: Colors.white70,
                       backgroundColor: Colors.grey.shade900,
                     ),
-                    // Our CodeBlockWidget draws the card, so the package
-                    // must not draw a second one around it.
                     codeblockDecoration: const BoxDecoration(),
                     codeblockPadding: EdgeInsets.zero,
                     a: const TextStyle(

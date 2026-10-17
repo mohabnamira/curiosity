@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:curiosity/pages/chat_page.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/search_bar_button.dart';
+import 'package:curiosity/widgets/answer_section.dart';
 
 class SearchSection extends ConsumerStatefulWidget {
   const SearchSection({super.key});
@@ -15,6 +18,8 @@ class SearchSection extends ConsumerStatefulWidget {
 
 class _SearchSectionState extends ConsumerState<SearchSection> {
   final queryController = TextEditingController();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
 
   @override
   void dispose() {
@@ -26,10 +31,70 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
     final query = queryController.text.trim();
     if (query.isEmpty) return;
 
+
+    ref.read(ttsServiceProvider).stop();
+
     ref.read(chatNotifierProvider.notifier).sendQuery(query);
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ChatPage()),
     );
+  }
+
+  Future<void> _listen() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Voice input is not supported on Flutter Web in this environment.'),
+        ),
+      );
+      return;
+    }
+
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    try {
+      bool available = await _speech.initialize(
+        onError: (_) {
+          setState(() => _isListening = false);
+        },
+        onStatus: (val) {
+          if (val == 'notListening' || val == 'done') {
+            setState(() => _isListening = false);
+          }
+        },
+      );
+
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (val) {
+            setState(() {
+              queryController.text = val.recognizedWords;
+            });
+          },
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Speech recognition not available or permission denied.'),
+          ),
+        );
+        setState(() => _isListening = false);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Speech recognition is not supported on this platform.'),
+        ),
+      );
+      setState(() => _isListening = false);
+    }
   }
 
   @override
@@ -70,9 +135,9 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
                   controller: queryController,
                   onSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
-                    hintText: 'Search anything...',
+                    hintText: _isListening ? 'Listening...' : 'Search anything...',
                     hintStyle: TextStyle(
-                      color: AppColors.textGrey,
+                      color: _isListening ? Colors.redAccent : AppColors.textGrey,
                       fontSize: 16,
                     ),
                     border: InputBorder.none,
@@ -115,6 +180,7 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
                       color: AppColors.cardColor,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.grey.shade800),
                       ),
                       child: SearchBarButton(
                         icon: Icons.auto_awesome_outlined,
@@ -122,7 +188,15 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const SearchBarButton(
+                    GestureDetector(
+                      onTap: _listen,
+                      child: SearchBarButton(
+                        icon: _isListening ? Icons.mic : Icons.mic_none,
+                        text: _isListening ? 'Listening' : 'Voice',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SearchBarButton(
                       icon: Icons.add_circle_outline,
                       text: 'Attach',
                     ),
