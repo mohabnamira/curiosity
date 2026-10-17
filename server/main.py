@@ -25,6 +25,11 @@ async def handle_chat(ws: WebSocket, body: ChatBody):
             {k: s[k] for k in ("index", "title", "url", "snippet")}
             for s in sources
         ])
+        if not sources:
+            hint = "Try switching Focus to All." if body.focus != "all" else "Try rephrasing your question."
+            await send(ws, "content", body.id, f"No sources found. {hint}")
+            await send(ws, "done", body.id)
+            return
         full_answer = ""
         async for text in llm_service.stream_answer(standalone_query, sources, body.history):
             full_answer += text

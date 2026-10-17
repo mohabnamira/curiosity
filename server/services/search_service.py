@@ -10,6 +10,8 @@ tavily_client = AsyncTavilyClient(api_key=settings.TAVILY_API_KEY)
 MAX_CHARS_PER_SOURCE = 1500
 SNIPPET_CHARS = 200
 
+NO_SCRAPE_HOSTS = ("youtube.com", "youtu.be")
+
 
 def chunk_text(text: str, max_chars: int = MAX_CHARS_PER_SOURCE) -> str:
     paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
@@ -67,6 +69,8 @@ class SearchService:
         return results
 
     async def _scrape(self, client: httpx.AsyncClient, url: str) -> str:
+        if any(host in url for host in NO_SCRAPE_HOSTS):
+            return ""
         try:
             resp = await client.get(url)
             resp.raise_for_status()

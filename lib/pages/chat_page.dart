@@ -13,6 +13,8 @@ import 'package:web/web.dart' as web;
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/widgets/answer_section.dart'
+    show ListenButton, ttsServiceProvider;
 import 'package:curiosity/widgets/glow_border.dart';
 
 final _codeOrCitation = RegExp(r'(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[(\d+)\](?!\()');
@@ -154,11 +156,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
   }
 
+  void _ask(String query) {
+    ref.read(ttsServiceProvider).stop();
+    ref.read(chatNotifierProvider.notifier).sendQuery(query);
+  }
+
   void _submit() {
     final query = _queryController.text.trim();
     if (query.isEmpty) return;
     _queryController.clear();
-    ref.read(chatNotifierProvider.notifier).sendQuery(query);
+    _ask(query);
   }
 
   Future<void> _openSourceUrl(String url) async {
@@ -247,7 +254,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final turns = ref.watch(chatNotifierProvider.select((s) => s.turns));
     final hasInFlight = turns.any((t) => t.isInFlight);
 
-    // Scroll when a turn is added, not on every streamed chunk.
     ref.listen(
       chatNotifierProvider.select((s) => s.turns.length),
       (_, _) => _scrollToBottom(),
@@ -389,6 +395,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           ),
                           const Spacer(),
                           if (turn.status == TurnStatus.done && turn.answer.isNotEmpty) ...[
+                            ListenButton(text: turn.answer),
                             IconButton(
                               icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.grey),
                               tooltip: 'Copy Answer',
@@ -460,7 +467,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               backgroundColor: AppColors.cardColor,
                               side: BorderSide(color: Colors.grey.shade800),
                               label: Text(q, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                              onPressed: () => ref.read(chatNotifierProvider.notifier).sendQuery(q),
+                              onPressed: () => _ask(q),
                             );
                           }).toList(),
                         ),

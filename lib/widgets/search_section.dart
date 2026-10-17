@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +6,7 @@ import 'package:curiosity/pages/chat_page.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/search_bar_button.dart';
-import 'package:curiosity/widgets/answer_section.dart';
+import 'package:curiosity/widgets/answer_section.dart' show ttsServiceProvider;
 
 class SearchSection extends ConsumerStatefulWidget {
   const SearchSection({super.key});
@@ -23,15 +22,27 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
 
   @override
   void dispose() {
+    _speech.cancel();
     queryController.dispose();
     super.dispose();
+  }
+
+  void _setListening(bool value) {
+    if (mounted) setState(() => _isListening = value);
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   void _submit() {
     final query = queryController.text.trim();
     if (query.isEmpty) return;
 
-
+    _speech.stop();
     ref.read(ttsServiceProvider).stop();
 
     ref.read(chatNotifierProvider.notifier).sendQuery(query);
@@ -41,59 +52,37 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
   }
 
   Future<void> _listen() async {
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Voice input is not supported on Flutter Web in this environment.'),
-        ),
-      );
-      return;
-    }
-
     if (_isListening) {
       await _speech.stop();
-      setState(() => _isListening = false);
+      _setListening(false);
       return;
     }
 
     try {
-      bool available = await _speech.initialize(
-        onError: (_) {
-          setState(() => _isListening = false);
-        },
-        onStatus: (val) {
-          if (val == 'notListening' || val == 'done') {
-            setState(() => _isListening = false);
+      final available = await _speech.initialize(
+        onError: (_) => _setListening(false),
+        onStatus: (status) {
+          if (status == 'notListening' || status == 'done') {
+            _setListening(false);
           }
         },
       );
 
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          onResult: (val) {
-            setState(() {
-              queryController.text = val.recognizedWords;
-            });
-          },
-        );
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Speech recognition not available or permission denied.'),
-          ),
-        );
-        setState(() => _isListening = false);
+      if (!available) {
+        _snack('Voice input is unavailable. Allow the microphone, or use Chrome.');
+        _setListening(false);
+        return;
       }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Speech recognition is not supported on this platform.'),
-        ),
+
+      _setListening(true);
+      _speech.listen(
+        onResult: (result) {
+          if (mounted) queryController.text = result.recognizedWords;
+        },
       );
-      setState(() => _isListening = false);
+    } catch (_) {
+      _snack('Voice input is not supported here.');
+      _setListening(false);
     }
   }
 
@@ -196,7 +185,7 @@ class _SearchSectionState extends ConsumerState<SearchSection> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    SearchBarButton(
+                    const SearchBarButton(
                       icon: Icons.add_circle_outline,
                       text: 'Attach',
                     ),

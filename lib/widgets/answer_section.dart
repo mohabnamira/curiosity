@@ -18,15 +18,13 @@ final ttsServiceProvider = Provider<TtsService>((ref) {
 
 class TtsService {
   final FlutterTts _tts = FlutterTts();
-  bool isPlaying = false;
+
+
+  final ValueNotifier<String?> speaking = ValueNotifier(null);
 
   TtsService() {
-    _tts.setCompletionHandler(() {
-      isPlaying = false;
-    });
-    _tts.setErrorHandler((msg) {
-      isPlaying = false;
-    });
+    _tts.setCompletionHandler(() => speaking.value = null);
+    _tts.setErrorHandler((_) => speaking.value = null);
   }
 
   String cleanText(String text) {
@@ -40,29 +38,55 @@ class TtsService {
   }
 
   Future<void> speak(String text) async {
-    if (isPlaying) {
+    if (speaking.value == text) {
       await stop();
       return;
     }
+    await _tts.stop();
     final plain = cleanText(text);
     if (plain.isEmpty) return;
-    isPlaying = true;
+    speaking.value = text;
     await _tts.speak(plain);
   }
 
   Future<void> stop() async {
-    isPlaying = false;
+    speaking.value = null;
     await _tts.stop();
   }
 
   void dispose() {
     _tts.stop();
+    speaking.dispose();
   }
 }
 
+class ListenButton extends ConsumerWidget {
+  final String text;
+
+  const ListenButton({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tts = ref.watch(ttsServiceProvider);
+    return ValueListenableBuilder<String?>(
+      valueListenable: tts.speaking,
+      builder: (context, speaking, _) {
+        final playing = speaking == text;
+        return IconButton(
+          icon: Icon(
+            playing ? Icons.stop_rounded : Icons.volume_up_rounded,
+            size: 18,
+            color: AppColors.textGrey,
+          ),
+          tooltip: playing ? 'Stop listening' : 'Listen to answer',
+          onPressed: () => tts.speak(text),
+        );
+      },
+    );
+  }
+}
 
 final _codeOrCitation = RegExp(r'(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[(\d+)\](?!\()');
-
 
 String linkifyCitations(String text, int sourceCount) {
   return text.replaceAllMapped(_codeOrCitation, (m) {
@@ -173,7 +197,6 @@ class AnswerSection extends ConsumerWidget {
       answerText,
       turn?.sources.length ?? 0,
     );
-    final ttsService = ref.watch(ttsServiceProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,19 +209,7 @@ class AnswerSection extends ConsumerWidget {
             ),
             const Spacer(),
             if (status == TurnStatus.done && answerText.isNotEmpty)
-              IconButton(
-                icon: Icon(
-                  ttsService.isPlaying ? Icons.stop_rounded : Icons.volume_up_rounded,
-                  size: 20,
-                  color: AppColors.textGrey,
-                ),
-                tooltip: ttsService.isPlaying ? 'Stop listening' : 'Listen to answer',
-                onPressed: () async {
-                  await ttsService.speak(answerText);
-                  // Trigger rebuild to update icon state
-                  (context as Element).markNeedsBuild();
-                },
-              ),
+              ListenButton(text: answerText),
           ],
         ),
         const SizedBox(height: 12),
