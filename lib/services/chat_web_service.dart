@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
 
-const String _serverUrl = String.fromEnvironment(
-  'SERVER_URL',
-  defaultValue: 'localhost:8000',
+const String _wsUrl = String.fromEnvironment(
+  'WS_URL',
+  defaultValue: 'ws://localhost:8000/ws/chat',
 );
 
 enum ConnectionStatus { connecting, connected, reconnecting, disconnected }
@@ -35,7 +35,7 @@ class ChatWebService {
   Stream<void> get connectionLostStream => _connectionLostController.stream;
 
   Uri _buildUri() {
-    final base = _serverUrl.contains('://') ? _serverUrl : 'ws://$_serverUrl';
+    final base = _wsUrl.contains('://') ? _wsUrl : 'ws://$_wsUrl';
     return Uri.parse('$base/ws/chat');
   }
 

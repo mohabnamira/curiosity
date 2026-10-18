@@ -64,6 +64,19 @@ class ChatNotifier extends Notifier<ChatState> {
 
   static const int _maxThreads = 50;
 
+  final Set<String> _cancelledTurnIds = {};
+
+  // TODO(backend): server keeps streaming until cancel support exists
+  void cancelTurn(String id) {
+    _cancelledTurnIds.add(id);
+    final turn = _findTurn(id);
+    if (turn != null && turn.isInFlight) {
+      final updated = turn.copyWith(status: TurnStatus.done);
+      _replaceTurn(updated);
+      _persistCurrentConversation();
+    }
+  }
+
   @override
   ChatState build() {
     final webService = ref.watch(chatWebServiceProvider);
@@ -139,6 +152,22 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
+  Future<void> renameThread(String id, String title) async {
+    final updated = state.savedThreads.map((thread) {
+      if (thread.id == id) {
+        return ChatThread(
+          id: thread.id,
+          title: title,
+          turns: thread.turns,
+          updatedAt: thread.updatedAt,
+        );
+      }
+      return thread;
+    }).toList();
+    state = state.copyWith(savedThreads: updated);
+    await _saveThreads();
+  }
+
   void setFocus(String focus) {
     state = state.copyWith(focus: focus);
   }
@@ -157,7 +186,10 @@ class ChatNotifier extends Notifier<ChatState> {
         .toList();
 
     state = state.copyWith(
-      turns: [...state.turns, Turn(id: id, question: query)],
+      turns: [
+        ...state.turns,
+        Turn(id: id, question: query, startedAt: DateTime.now()),
+      ],
       activeTurnId: id,
       clearHighlight: true,
     );
@@ -181,6 +213,7 @@ class ChatNotifier extends Notifier<ChatState> {
     final id = data['id']?.toString();
     final type = data['type']?.toString();
     if (id == null || type == null) return;
+    if (_cancelledTurnIds.contains(id)) return;
 
     final turn = _findTurn(id);
     if (turn == null || !turn.isInFlight) return;
@@ -195,8 +228,16 @@ class ChatNotifier extends Notifier<ChatState> {
               .whereType<Map>()
               .map((item) => Source.fromJson(Map<String, dynamic>.from(item)))
               .toList();
+
+          int? researchedSeconds;
+          if (turn.startedAt != null) {
+            final diff = DateTime.now().difference(turn.startedAt!).inSeconds;
+            researchedSeconds = diff < 1 ? 1 : diff;
+          }
+
           updated = turn.copyWith(
             sources: sources,
+            researchedSeconds: researchedSeconds,
             status: TurnStatus.generating,
           );
         }
@@ -231,10 +272,7 @@ class ChatNotifier extends Notifier<ChatState> {
   void _persistCurrentConversation() {
     final finished = state.turns.where((t) => !t.isInFlight).toList();
     if (finished.isEmpty) return;
-    final firstQuestion = finished.first.question;
-    final title = firstQuestion.length > 30
-        ? '${firstQuestion.substring(0, 30)}...'
-        : firstQuestion;
+    final title = finished.first.question;
 
     final threadId = state.activeThreadId ?? DateTime.now().microsecondsSinceEpoch.toString();
     final thread = ChatThread(

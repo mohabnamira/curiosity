@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const background = Color.fromRGBO(25, 26, 26, 1);
-  static const sideNav = Color.fromRGBO(32, 34, 34, 1);
-  static const searchBar = Color.fromRGBO(32, 34, 34, 1);
-  static const searchBarBorder = Color.fromRGBO(60, 63, 64, 1);
-  static const iconGrey = Color(0xFF909090);
-  static const textGrey = Color(0xFFAAAAAA);
-  static const footerGrey = Color(0xFF737373);
-  static const proButton = Color.fromRGBO(47, 48, 47, 1);
-  static const cardColor = Color(0xFF262626);
-  static const submitButton = Color.fromRGBO(27, 185, 206, 1);
+  static const background = Color(0xFF0D0E11);
+  static const surface = Color(0xFF16181D);
+  static const border = Color(0xFF23262F);
+  static const textPrimary = Color(0xFFF4F5F6);
+  static const iconMuted = Color(0xFF727682);
+  static const textSecondary = Color(0xFF8A8F9B);
+  static const focus = Color(0xFFFFFFFF);
+  // Compatibility aliases for existing code
+  static const sideNav = surface;
+  static const searchBar = surface;
+  static const searchBarBorder = border;
+  static const iconGrey = iconMuted;
+  static const textGrey = textPrimary;
+  static const footerGrey = textSecondary;
+  static const proButton = focus;
+  static const cardColor = surface;
+  static const submitButton = focus;
   static const whiteColor = Colors.white;
 }

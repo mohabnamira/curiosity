@@ -1,9 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/pages/home_pages.dart';
-import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/theme/app_theme.dart';
 
 void main() {
   runApp(
@@ -32,19 +31,9 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'curiosity',
+      debugShowCheckedModeBanner: false,
       scrollBehavior: const MyCustomScrollBehavior(),
-      theme: ThemeData(
-        scaffoldBackgroundColor: AppColors.background,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.submitButton),
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme.copyWith(
-            bodyMedium: const TextStyle(
-              fontSize: 15,
-              color: AppColors.whiteColor,
-            ),
-          ),
-        ),
-      ),
+      theme: AppTheme.theme,
       home: const HomePage(),
     );
   }

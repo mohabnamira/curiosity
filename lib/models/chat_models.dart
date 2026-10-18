@@ -1,19 +1,26 @@
 class Source {
   final String title;
   final String url;
+  final String snippet;
 
-  const Source({required this.title, required this.url});
+  const Source({
+    required this.title,
+    required this.url,
+    this.snippet = '',
+  });
 
   factory Source.fromJson(Map<String, dynamic> json) {
     return Source(
       title: json['title']?.toString() ?? '',
       url: json['url']?.toString() ?? '',
+      snippet: json['snippet']?.toString() ?? '',
     );
   }
 
   Map<String, dynamic> toJson() => {
         'title': title,
         'url': url,
+        'snippet': snippet,
       };
 }
 
@@ -24,9 +31,11 @@ class Turn {
   final String question;
   final List<Source> sources;
   final String answer;
+  final DateTime? startedAt;
+  final int? researchedSeconds;
   final List<String> relatedQuestions;
-  final TurnStatus status;
   final String? errorMessage;
+  final TurnStatus status;
 
   const Turn({
     required this.id,
@@ -34,8 +43,10 @@ class Turn {
     this.sources = const [],
     this.answer = '',
     this.relatedQuestions = const [],
-    this.status = TurnStatus.searching,
+    this.startedAt, // new
+    this.researchedSeconds, // new
     this.errorMessage,
+    this.status = TurnStatus.searching,
   });
 
   bool get isInFlight =>
@@ -47,6 +58,8 @@ class Turn {
     List<Source>? sources,
     String? answer,
     List<String>? relatedQuestions,
+    DateTime? startedAt,
+    int? researchedSeconds,
     TurnStatus? status,
     String? errorMessage,
   }) {
@@ -56,6 +69,8 @@ class Turn {
       sources: sources ?? this.sources,
       answer: answer ?? this.answer,
       relatedQuestions: relatedQuestions ?? this.relatedQuestions,
+      startedAt: startedAt ?? this.startedAt,
+      researchedSeconds: researchedSeconds ?? this.researchedSeconds,
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
     );
@@ -67,6 +82,8 @@ class Turn {
         'sources': sources.map((s) => s.toJson()).toList(),
         'answer': answer,
         'relatedQuestions': relatedQuestions,
+        'startedAt': startedAt?.toIso8601String(),
+        'researchedSeconds': researchedSeconds,
         'status': status.name,
         'errorMessage': errorMessage,
       };
@@ -85,6 +102,10 @@ class Turn {
               ?.map((q) => q.toString())
               .toList() ??
           [],
+      startedAt: json['startedAt'] != null
+          ? DateTime.tryParse(json['startedAt'].toString())
+          : null,
+      researchedSeconds: json['researchedSeconds'] as int?,
       status: TurnStatus.values.firstWhere(
         (e) => e.name == json['status'],
         orElse: () => TurnStatus.done,

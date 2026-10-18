@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:curiosity/theme/colors.dart';
 
 class GlowBorder extends StatefulWidget {
   final bool active;
@@ -56,9 +55,10 @@ class _GlowBorderState extends State<GlowBorder>
           boxShadow: widget.active
               ? [
                   BoxShadow(
-                    color: AppColors.submitButton
-                        .withValues(alpha: 0.15 + 0.35 * _c.value),
+                    color: Colors.white
+                        .withValues(alpha: 0.05 + 0.15 * _c.value),
                     blurRadius: 6 + 10 * _c.value,
+                    spreadRadius: 1,
                   ),
                 ]
               : const [],
