@@ -23,37 +23,35 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          const SideBar(),
-          Expanded(
-            child: Column(
-              children: [
-                const Expanded(child: SearchSection()),
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: const Wrap(
-                    alignment: WrapAlignment.center,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          "© 2026 curiosity AI, Inc. All rights reserved.",
-                          style: TextStyle(
-                            color: AppColors.footerGrey,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 800;
+
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          drawer: isMobile
+              ? const Drawer(
+                  backgroundColor: AppColors.surface,
+                  child: SideBar(isDrawer: true),
+                )
+              : null,
+          appBar: isMobile
+              ? AppBar(
+                  backgroundColor: AppColors.background,
+                  elevation: 0,
+                  iconTheme: const IconThemeData(color: AppColors.textPrimary),
+                )
+              : null,
+          body: Row(
+            children: [
+              if (!isMobile) const SideBar(),
+              const Expanded(
+                child: SearchSection(),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
