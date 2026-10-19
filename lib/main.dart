@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:curiosity/pages/home_pages.dart';
+import 'package:curiosity/pages/home_page.dart';
 import 'package:curiosity/theme/app_theme.dart';
 
 void main() {

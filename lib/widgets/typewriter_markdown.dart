@@ -30,11 +30,9 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   final ValueNotifier<int> _revealedCharsCount = ValueNotifier<int>(0);
-  final ValueNotifier<bool> _cursorVisible = ValueNotifier<bool>(true);
 
   double _fractionalChars = 0.0;
   Duration _lastTick = Duration.zero;
-  Duration _cursorElapsed = Duration.zero;
   bool _finishedNotified = false;
 
   @override
@@ -81,7 +79,6 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
       _ticker.dispose();
     }
     _revealedCharsCount.dispose();
-    _cursorVisible.dispose();
     super.dispose();
   }
 
@@ -94,13 +91,6 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
     _lastTick = elapsed;
 
     if (dt <= 0 || dt > 0.5) return;
-
-    // Blink cursor every ~530ms
-    _cursorElapsed += Duration(microseconds: (dt * 1000000).toInt());
-    if (_cursorElapsed.inMilliseconds >= 530) {
-      _cursorElapsed = Duration.zero;
-      _cursorVisible.value = !_cursorVisible.value;
-    }
 
     final totalChars = widget.turn.answer.characters.length;
     final currentRevealed = _revealedCharsCount.value;
@@ -185,74 +175,52 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
             : fullCharacters.take(count).toString();
 
         final sanitizedText = _sanitizeMarkdown(shownSubstring);
-        final isStillTyping = widget.animate &&
-            (count < totalCount || widget.turn.status != TurnStatus.done);
 
-        return Stack(
-          children: [
-            MarkdownBody(
-              data: sanitizedText,
-              inlineSyntaxes: [
-                CitationSyntax(),
-              ],
-              builders: {
-                'pre': CodeBlockBuilder(),
-                'citation': CitationElementBuilder(
-                  sourceUrls: sourceUrls,
-                  onCitationTap: widget.onHighlightSource,
-                ),
-              },
-              styleSheet: MarkdownStyleSheet(
-                p: GoogleFonts.newsreader(
-                  fontSize: 17,
-                  height: 1.65,
-                  color: AppColors.textPrimary,
-                ),
-                h1: GoogleFonts.newsreader(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-                h2: GoogleFonts.newsreader(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-                h3: GoogleFonts.newsreader(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-                listBullet: GoogleFonts.newsreader(
-                  fontSize: 17,
-                  color: AppColors.textPrimary,
-                ),
-                code: GoogleFonts.firaCode(
-                  fontSize: 13,
-                  color: AppColors.textPrimary,
-                  backgroundColor: const Color(0xFF1B1D24),
-                ),
-                codeblockDecoration: const BoxDecoration(),
-              ),
-              extensionSet: md.ExtensionSet.gitHubFlavored,
-            ),
-            // Blinking cursor
-            if (isStillTyping)
-              ValueListenableBuilder<bool>(
-                valueListenable: _cursorVisible,
-                builder: (context, visible, _) {
-                  if (!visible) return const SizedBox.shrink();
-                  return Positioned(
-                    bottom: 2,
-                    child: Container(
-                      width: 2,
-                      height: 17,
-                      color: AppColors.textPrimary.withValues(alpha: 0.7),
-                    ),
-                  );
-                },
-              ),
+        return MarkdownBody(
+          data: sanitizedText,
+          inlineSyntaxes: [
+            CitationSyntax(),
           ],
+          builders: {
+            'pre': CodeBlockBuilder(),
+            'citation': CitationElementBuilder(
+              sourceUrls: sourceUrls,
+              onCitationTap: widget.onHighlightSource,
+            ),
+          },
+          styleSheet: MarkdownStyleSheet(
+            p: GoogleFonts.newsreader(
+              fontSize: 17,
+              height: 1.65,
+              color: AppColors.textPrimary,
+            ),
+            h1: GoogleFonts.newsreader(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+            h2: GoogleFonts.newsreader(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+            h3: GoogleFonts.newsreader(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+            listBullet: GoogleFonts.newsreader(
+              fontSize: 17,
+              color: AppColors.textPrimary,
+            ),
+            code: GoogleFonts.firaCode(
+              fontSize: 13,
+              color: AppColors.textPrimary,
+              backgroundColor: const Color(0xFF1B1D24),
+            ),
+            codeblockDecoration: const BoxDecoration(),
+          ),
+          extensionSet: md.ExtensionSet.gitHubFlavored,
         );
       },
     );

@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/pages/chat_page.dart';
-import 'package:curiosity/pages/home_pages.dart';
+import 'package:curiosity/pages/home_page.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 

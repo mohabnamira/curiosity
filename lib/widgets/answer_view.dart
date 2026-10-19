@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/answer_actions.dart';
+import 'package:curiosity/widgets/question_card.dart';
+import 'package:curiosity/widgets/related_question_tile.dart';
 import 'package:curiosity/widgets/skeleton_shimmer.dart';
 import 'package:curiosity/widgets/sources_panel.dart';
 import 'package:curiosity/widgets/sources_pill.dart';
@@ -75,29 +77,8 @@ class _AnswerViewState extends State<AnswerView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. User query: right-aligned rounded bubble (surface, 1px border, max width ~70%), Inter
-          Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 540),
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border, width: 1),
-              ),
-              child: Text(
-                turn.question,
-                style: GoogleFonts.inter(
-                  color: AppColors.textPrimary,
-                  fontSize: 15,
-                  height: 1.4,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-            ),
-          ),
+          // 1. User question bubble
+          QuestionCard(question: turn.question),
 
           // 2. Sources pill above answer
           Padding(
@@ -194,7 +175,11 @@ class _AnswerViewState extends State<AnswerView> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  for (final q in turn.relatedQuestions) _buildRelatedQuestionRow(q),
+                  for (final q in turn.relatedQuestions)
+                    RelatedQuestionTile(
+                      question: q,
+                      onTap: widget.onAskQuery,
+                    ),
                 ],
               ],
             ),
@@ -253,72 +238,6 @@ class _AnswerViewState extends State<AnswerView> {
               ),
             ),
         ],
-      ),
-    );
-  }
-
-
-
-  Widget _buildRelatedQuestionRow(String q) {
-    return _HoverRelatedRow(
-      text: q,
-      onTap: () => widget.onAskQuery(q),
-    );
-  }
-}
-
-class _HoverRelatedRow extends StatefulWidget {
-  final String text;
-  final VoidCallback onTap;
-
-  const _HoverRelatedRow({required this.text, required this.onTap});
-
-  @override
-  State<_HoverRelatedRow> createState() => _HoverRelatedRowState();
-}
-
-class _HoverRelatedRowState extends State<_HoverRelatedRow> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: _isHovered ? AppColors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '↳',
-                style: TextStyle(
-                  color: AppColors.iconMuted,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.text,
-                  style: GoogleFonts.inter(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    height: 1.3,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
