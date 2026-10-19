@@ -116,16 +116,17 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
       return;
     }
 
-    // Characters per second calculation
+    // Smooth letter-by-letter typing calculation
     final backlog = totalChars - currentRevealed;
-    double speed = 90.0; // base speed
+    // Natural human/assistant typing pace: ~48 chars per second (approx. 1 char every 20ms)
+    double speed = 48.0;
     if (widget.turn.status == TurnStatus.done) {
-      // Finish within 1.5s
-      final neededSpeed = backlog / 1.5;
+      // Once stream is done, smoothly catch up the remaining backlog within ~1.2s max
+      final neededSpeed = backlog / 1.2;
       if (neededSpeed > speed) speed = neededSpeed;
-    } else if (backlog > 200) {
-      // Speed up so shown never lags received by > 1s
-      speed = backlog.toDouble();
+    } else if (backlog > 40) {
+      // If the backend streams large chunks, smoothly accelerate so it reveals steadily letter by letter
+      speed = (48.0 + (backlog - 40) * 1.5).clamp(48.0, 180.0);
     }
 
     _fractionalChars += speed * dt;
