@@ -35,8 +35,13 @@ class ChatWebService {
   Stream<void> get connectionLostStream => _connectionLostController.stream;
 
   Uri _buildUri() {
-    final base = _wsUrl.contains('://') ? _wsUrl : 'ws://$_wsUrl';
-    return Uri.parse('$base/ws/chat');
+    final raw = _wsUrl.trim();
+    final urlWithScheme = raw.contains('://') ? raw : 'ws://$raw';
+    final parsed = Uri.parse(urlWithScheme);
+    if (parsed.path.isEmpty || parsed.path == '/') {
+      return parsed.replace(path: '/ws/chat');
+    }
+    return parsed;
   }
 
   void connect() {

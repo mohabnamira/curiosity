@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/pages/chat_page.dart';
+import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/query_input.dart';
 
-class SearchSection extends StatelessWidget {
+class SearchSection extends ConsumerWidget {
   const SearchSection({super.key});
 
-  void _onSubmit(BuildContext context, String query) {
+  void _onSubmit(BuildContext context, WidgetRef ref, String query) {
+    ref.read(chatNotifierProvider.notifier).sendQuery(query);
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const ChatPage()),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -53,7 +56,7 @@ class SearchSection extends StatelessWidget {
               child: QueryInput(
                 hintText: 'Ask anything...',
                 autofocus: true,
-                onSubmit: (query) => _onSubmit(context, query),
+                onSubmit: (query) => _onSubmit(context, ref, query),
               ),
             ),
           ],
