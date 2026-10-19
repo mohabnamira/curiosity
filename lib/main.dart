@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:curiosity/pages/home_page.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/theme/app_theme.dart';
 
 void main() {
@@ -24,16 +25,20 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
       };
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends ConsumerWidget {
   const MainApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsNotifierProvider);
+
     return MaterialApp(
-      title: 'curiosity',
+      title: 'Curiosity',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const MyCustomScrollBehavior(),
-      theme: AppTheme.theme,
+      theme: AppTheme.buildTheme(
+        accent: settings.accentColor,
+      ),
       home: const HomePage(),
     );
   }

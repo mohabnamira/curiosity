@@ -115,7 +115,13 @@ class ChatWebService {
     });
   }
 
-  Future<void> sendChat(String id, String query, List<Map<String, String>> history, String focus) async {
+  Future<void> sendChat(
+    String id,
+    String query,
+    List<Map<String, String>> history,
+    String focus, {
+    int maxResults = 5,
+  }) async {
     final socket = _socket;
     if (socket == null) throw StateError('Socket not created');
 
@@ -132,6 +138,7 @@ class ChatWebService {
       'query': query,
       'history': history,
       'focus': focus,
+      'max_results': maxResults,
     }));
   }
 

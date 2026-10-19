@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:curiosity/providers/chat_provider.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/services/tts_service.dart';
 import 'package:curiosity/theme/colors.dart';
 
@@ -184,6 +185,8 @@ class _QueryInputState extends ConsumerState<QueryInput>
     }
 
     final currentFocus = chatState.focus;
+    final settings = ref.watch(settingsNotifierProvider);
+    final accent = settings.accentColor.color;
 
     return Focus(
       onKeyEvent: _handleKeyEvent,
@@ -192,10 +195,10 @@ class _QueryInputState extends ConsumerState<QueryInput>
         builder: (context, child) {
           final List<BoxShadow> shadows;
           if (isInFlight) {
-            final alpha = 0.04 + 0.06 * _pulseController.value;
+            final alpha = 0.05 + 0.08 * _pulseController.value;
             shadows = [
               BoxShadow(
-                color: Colors.white.withValues(alpha: alpha),
+                color: accent.withValues(alpha: alpha),
                 blurRadius: 24,
                 spreadRadius: 0,
               ),
@@ -203,7 +206,7 @@ class _QueryInputState extends ConsumerState<QueryInput>
           } else if (_isFocused) {
             shadows = [
               BoxShadow(
-                color: Colors.white.withValues(alpha: 0.07),
+                color: accent.withValues(alpha: 0.12),
                 blurRadius: 24,
                 spreadRadius: 0,
               ),
@@ -280,7 +283,7 @@ class _QueryInputState extends ConsumerState<QueryInput>
                   _buildMicButton(),
                   const SizedBox(width: 8),
                   // Send / Stop button
-                  _buildSubmitOrStopButton(isInFlight, inFlightTurn?.id as String?),
+                  _buildSubmitOrStopButton(isInFlight, inFlightTurn?.id as String?, accent),
                 ],
               ),
             ),
@@ -423,7 +426,7 @@ class _QueryInputState extends ConsumerState<QueryInput>
     );
   }
 
-  Widget _buildSubmitOrStopButton(bool isInFlight, String? inFlightTurnId) {
+  Widget _buildSubmitOrStopButton(bool isInFlight, String? inFlightTurnId, Color accent) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 150),
       transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
@@ -438,14 +441,14 @@ class _QueryInputState extends ConsumerState<QueryInput>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: AppColors.focus,
+                    color: accent,
                     shape: BoxShape.circle,
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Icon(
                       Icons.stop_rounded,
                       size: 16,
-                      color: AppColors.background,
+                      color: accent == Colors.white ? AppColors.background : Colors.white,
                     ),
                   ),
                 ),
@@ -461,14 +464,16 @@ class _QueryInputState extends ConsumerState<QueryInput>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: _hasText ? AppColors.focus : AppColors.border,
+                    color: _hasText ? accent : AppColors.border,
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Icon(
                       Icons.arrow_upward_rounded,
                       size: 17,
-                      color: _hasText ? AppColors.background : AppColors.iconMuted,
+                      color: _hasText
+                          ? (accent == Colors.white ? AppColors.background : Colors.white)
+                          : AppColors.iconMuted,
                     ),
                   ),
                 ),

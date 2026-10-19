@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/models/settings_state.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/citation_syntax.dart';
 import 'package:curiosity/widgets/shared/code_block.dart';
 
-class TypewriterMarkdown extends StatefulWidget {
+class TypewriterMarkdown extends ConsumerStatefulWidget {
   final Turn turn;
   final bool animate;
   final ValueChanged<int>? onHighlightSource;
@@ -23,10 +26,10 @@ class TypewriterMarkdown extends StatefulWidget {
   });
 
   @override
-  State<TypewriterMarkdown> createState() => _TypewriterMarkdownState();
+  ConsumerState<TypewriterMarkdown> createState() => _TypewriterMarkdownState();
 }
 
-class _TypewriterMarkdownState extends State<TypewriterMarkdown>
+class _TypewriterMarkdownState extends ConsumerState<TypewriterMarkdown>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   final ValueNotifier<int> _revealedCharsCount = ValueNotifier<int>(0);
@@ -161,9 +164,44 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
     return text;
   }
 
+  TextStyle _fontForFamily(
+    AnswerFontFamily family, {
+    required double fontSize,
+    FontWeight fontWeight = FontWeight.normal,
+    double height = 1.65,
+    required Color color,
+  }) {
+    switch (family) {
+      case AnswerFontFamily.serif:
+        return GoogleFonts.newsreader(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          height: height,
+          color: color,
+        );
+      case AnswerFontFamily.sans:
+        return GoogleFonts.inter(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          height: height,
+          color: color,
+        );
+      case AnswerFontFamily.mono:
+        return GoogleFonts.firaCode(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          height: height,
+          color: color,
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsNotifierProvider);
     final sourceUrls = widget.turn.sources.map((s) => s.url).toList();
+    final baseSize = settings.answerFontSize;
+    final fontFam = settings.answerFont;
 
     return ValueListenableBuilder<int>(
       valueListenable: _revealedCharsCount,
@@ -189,32 +227,37 @@ class _TypewriterMarkdownState extends State<TypewriterMarkdown>
             ),
           },
           styleSheet: MarkdownStyleSheet(
-            p: GoogleFonts.newsreader(
-              fontSize: 17,
+            p: _fontForFamily(
+              fontFam,
+              fontSize: baseSize,
               height: 1.65,
               color: AppColors.textPrimary,
             ),
-            h1: GoogleFonts.newsreader(
-              fontSize: 24,
+            h1: _fontForFamily(
+              fontFam,
+              fontSize: baseSize * 1.4,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
             ),
-            h2: GoogleFonts.newsreader(
-              fontSize: 20,
+            h2: _fontForFamily(
+              fontFam,
+              fontSize: baseSize * 1.2,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
             ),
-            h3: GoogleFonts.newsreader(
-              fontSize: 18,
+            h3: _fontForFamily(
+              fontFam,
+              fontSize: baseSize * 1.1,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
             ),
-            listBullet: GoogleFonts.newsreader(
-              fontSize: 17,
+            listBullet: _fontForFamily(
+              fontFam,
+              fontSize: baseSize,
               color: AppColors.textPrimary,
             ),
             code: GoogleFonts.firaCode(
-              fontSize: 13,
+              fontSize: (baseSize * 0.85).clamp(11.0, 16.0),
               color: AppColors.textPrimary,
               backgroundColor: const Color(0xFF1B1D24),
             ),

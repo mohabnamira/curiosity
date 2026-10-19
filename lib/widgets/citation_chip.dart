@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 
 String cleanDomain(String url) {
@@ -14,7 +16,7 @@ String cleanDomain(String url) {
   }
 }
 
-class CitationGroupWidget extends StatelessWidget {
+class CitationGroupWidget extends ConsumerWidget {
   final List<int> sourceIndices; // 0-based source indices
   final List<String> sourceUrls;
   final ValueChanged<int>? onCitationTap;
@@ -27,9 +29,11 @@ class CitationGroupWidget extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (sourceIndices.isEmpty) return const SizedBox.shrink();
 
+    final settings = ref.watch(settingsNotifierProvider);
+    final accent = settings.accentColor.color;
     final firstIndex = sourceIndices.first;
     final firstUrl = (firstIndex >= 0 && firstIndex < sourceUrls.length)
         ? sourceUrls[firstIndex]
@@ -56,10 +60,10 @@ class CitationGroupWidget extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.language_rounded,
                 size: 11,
-                color: AppColors.iconMuted,
+                color: accent == Colors.white ? AppColors.iconMuted : accent,
               ),
               const SizedBox(width: 4),
               Text(

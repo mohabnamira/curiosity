@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/services/chat_web_service.dart';
 
 final chatNotifierProvider =
@@ -61,8 +62,6 @@ class ChatState {
 class ChatNotifier extends Notifier<ChatState> {
   static const String _storageKey = 'curiosity_chat_threads_v1';
   static const int _maxHistoryTurns = 3;
-
-  static const int _maxThreads = 50;
 
   final Set<String> _cancelledTurnIds = {};
   final Set<String> _liveTurnIds = {};
@@ -198,7 +197,14 @@ class ChatNotifier extends Notifier<ChatState> {
       clearHighlight: true,
     );
 
-    ref.read(chatWebServiceProvider).sendChat(id, query, history, state.focus).catchError((_) {
+    final settings = ref.read(settingsNotifierProvider);
+    ref.read(chatWebServiceProvider).sendChat(
+      id,
+      query,
+      history,
+      state.focus,
+      maxResults: settings.maxSources,
+    ).catchError((_) {
       _failTurn(id, 'Could not reach the server');
     });
 
@@ -274,6 +280,9 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void _persistCurrentConversation() {
+    final settings = ref.read(settingsNotifierProvider);
+    if (!settings.saveHistory) return;
+
     final finished = state.turns.where((t) => !t.isInFlight).toList();
     if (finished.isEmpty) return;
     final title = finished.first.question;
@@ -291,10 +300,24 @@ class ChatNotifier extends Notifier<ChatState> {
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     state = state.copyWith(
-      savedThreads: updatedThreads.take(_maxThreads).toList(),
+      savedThreads: updatedThreads.take(settings.historyLimit).toList(),
       activeThreadId: threadId,
     );
     _saveThreads();
+  }
+
+  Future<void> clearAllHistory() async {
+    state = state.copyWith(
+      savedThreads: [],
+      turns: [],
+      activeTurnId: null,
+      clearActiveThread: true,
+      clearHighlight: true,
+    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKey);
+    } catch (_) {}
   }
 
   void _failTurn(String id, String message) {

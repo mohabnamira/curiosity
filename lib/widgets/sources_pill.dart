@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/citation_chip.dart';
 
-class SourcesPill extends StatefulWidget {
+class SourcesPill extends ConsumerStatefulWidget {
   final List<Source> sources;
   final int? researchedSeconds;
   final bool isSearching;
@@ -19,10 +21,10 @@ class SourcesPill extends StatefulWidget {
   });
 
   @override
-  State<SourcesPill> createState() => _SourcesPillState();
+  ConsumerState<SourcesPill> createState() => _SourcesPillState();
 }
 
-class _SourcesPillState extends State<SourcesPill>
+class _SourcesPillState extends ConsumerState<SourcesPill>
     with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   late final AnimationController _shimmerController;
@@ -115,6 +117,8 @@ class _SourcesPillState extends State<SourcesPill>
   @override
   Widget build(BuildContext context) {
     final hasSources = widget.sources.isNotEmpty;
+    final settings = ref.watch(settingsNotifierProvider);
+    final accent = settings.accentColor.color;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -130,12 +134,12 @@ class _SourcesPillState extends State<SourcesPill>
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: _isHovered ? AppColors.textSecondary : AppColors.border,
+              color: _isHovered ? accent.withValues(alpha: 0.8) : AppColors.border,
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.white.withValues(alpha: 0.05),
+                color: accent.withValues(alpha: _isHovered ? 0.12 : 0.05),
                 blurRadius: 24,
                 offset: const Offset(0, 4),
               ),

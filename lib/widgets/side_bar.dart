@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/pages/chat_page.dart';
 import 'package:curiosity/pages/home_page.dart';
+import 'package:curiosity/pages/settings_page.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 
@@ -467,27 +468,82 @@ class _SideBarState extends ConsumerState<SideBar> {
     if (collapsed) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 12),
-            child: SizedBox(
-              width: 40,
-              height: 40,
-              child: Center(
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                  color: AppColors.iconMuted,
-                  tooltip: 'Expand sidebar',
-                  onPressed: _toggleCollapsed,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: IconButton(
+                      icon: const Icon(Icons.settings_outlined, size: 18),
+                      color: AppColors.iconMuted,
+                      tooltip: 'Settings',
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const SettingsPage()),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                      color: AppColors.iconMuted,
+                      tooltip: 'Expand sidebar',
+                      onPressed: _toggleCollapsed,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
-    return const SizedBox(height: 8);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SettingsPage()),
+          );
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.settings_outlined, size: 18, color: AppColors.iconMuted),
+              const SizedBox(width: 10),
+              Text(
+                'Settings',
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

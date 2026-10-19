@@ -13,3 +13,4 @@ class ChatBody(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     history: list[HistoryItem] = Field(default_factory=list, max_length=10)
     focus: str = "all"
+    max_results: int = Field(default=5, ge=1, le=10)

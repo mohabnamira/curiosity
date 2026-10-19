@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/citation_chip.dart';
 
-class SourceCard extends StatelessWidget {
+class SourceCard extends ConsumerWidget {
   final Source source;
   final int index;
   final bool isHighlighted;
@@ -25,7 +27,9 @@ class SourceCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsNotifierProvider);
+    final accent = settings.accentColor.color;
     final domain = cleanDomain(source.url);
     final initial = domain.isNotEmpty ? domain[0].toUpperCase() : '${index + 1}';
     final faviconUrl = 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
@@ -42,9 +46,18 @@ class SourceCard extends StatelessWidget {
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isHighlighted ? AppColors.focus : AppColors.border,
-              width: 1,
+              color: isHighlighted ? accent : AppColors.border,
+              width: isHighlighted ? 1.5 : 1,
             ),
+            boxShadow: isHighlighted
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/answer_actions.dart';
 import 'package:curiosity/widgets/question_card.dart';
@@ -10,7 +12,7 @@ import 'package:curiosity/widgets/sources_panel.dart';
 import 'package:curiosity/widgets/sources_pill.dart';
 import 'package:curiosity/widgets/typewriter_markdown.dart';
 
-class AnswerView extends StatefulWidget {
+class AnswerView extends ConsumerStatefulWidget {
   final Turn turn;
   final bool isLatest;
   final bool animateTypewriter;
@@ -35,10 +37,10 @@ class AnswerView extends StatefulWidget {
   });
 
   @override
-  State<AnswerView> createState() => _AnswerViewState();
+  ConsumerState<AnswerView> createState() => _AnswerViewState();
 }
 
-class _AnswerViewState extends State<AnswerView> {
+class _AnswerViewState extends ConsumerState<AnswerView> {
   bool _mobileSourcesExpanded = false;
   bool _typingFinished = false;
 
@@ -67,13 +69,14 @@ class _AnswerViewState extends State<AnswerView> {
   @override
   Widget build(BuildContext context) {
     final turn = widget.turn;
+    final settings = ref.watch(settingsNotifierProvider);
     final isSearching = turn.status == TurnStatus.searching;
     final isGenerating = turn.status == TurnStatus.generating;
     final isDone = turn.status == TurnStatus.done;
     final isError = turn.status == TurnStatus.error;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 40.0),
+      padding: EdgeInsets.only(bottom: settings.compactMode ? 24.0 : 40.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -81,21 +84,25 @@ class _AnswerViewState extends State<AnswerView> {
           QuestionCard(question: turn.question),
 
           // 2. Sources pill above answer
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SourcesPill(
-                sources: turn.sources,
-                researchedSeconds: turn.researchedSeconds,
-                isSearching: isSearching,
-                onTap: _onSourcesPillTap,
+          if (settings.showSourceCards)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SourcesPill(
+                  sources: turn.sources,
+                  researchedSeconds: turn.researchedSeconds,
+                  isSearching: isSearching,
+                  onTap: _onSourcesPillTap,
+                ),
               ),
             ),
-          ),
 
           // Mobile sources collapsible strip
-          if (widget.showInlineSources && turn.sources.isNotEmpty && _mobileSourcesExpanded) ...[
+          if (settings.showSourceCards &&
+              widget.showInlineSources &&
+              turn.sources.isNotEmpty &&
+              _mobileSourcesExpanded) ...[
             _buildMobileSourcesAccordion(),
             const SizedBox(height: 14),
           ],
@@ -163,7 +170,7 @@ class _AnswerViewState extends State<AnswerView> {
                   const SizedBox(height: 16),
                   AnswerActions(turn: turn),
                 ],
-                if (turn.relatedQuestions.isNotEmpty) ...[
+                if (settings.showRelatedQuestions && turn.relatedQuestions.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   Text(
                     'Related',
