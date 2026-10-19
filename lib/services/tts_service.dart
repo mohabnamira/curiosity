@@ -33,16 +33,23 @@ class TtsService {
       await stop();
       return;
     }
-    await _tts.stop();
+    await stop();
     final plain = cleanText(text);
     if (plain.isEmpty) return;
-    speaking.value = text;
-    await _tts.speak(plain);
+    try {
+      speaking.value = text;
+      await _tts.speak(plain);
+    } catch (e) {
+      speaking.value = null;
+      debugPrint('TTS unavailable or failed: $e');
+    }
   }
 
   Future<void> stop() async {
     speaking.value = null;
-    await _tts.stop();
+    try {
+      await _tts.stop();
+    } catch (_) {}
   }
 
   void dispose() {

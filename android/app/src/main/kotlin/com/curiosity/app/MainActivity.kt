@@ -1,4 +1,4 @@
-package com.example.curiosity
+package com.curiosity.app
 
 import io.flutter.embedding.android.FlutterActivity
 
