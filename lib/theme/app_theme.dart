@@ -37,18 +37,16 @@ class AppTheme {
     ),
     // Default font family for widgets that don't specify
     fontFamily: GoogleFonts.inter().fontFamily,
-    // Input decoration theme uses our surface/background colors
-    inputDecorationTheme: InputDecorationTheme(
+    // Input decoration theme uses our surface/background colors with zero outline
+    inputDecorationTheme: const InputDecorationTheme(
       filled: true,
       fillColor: AppColors.surface,
-      border: OutlineInputBorder(
-        borderSide: BorderSide(color: AppColors.border, width: 1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: AppColors.focus, width: 1),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      disabledBorder: InputBorder.none,
+      errorBorder: InputBorder.none,
+      focusedErrorBorder: InputBorder.none,
     ),
     // AppBar styling
     appBarTheme: const AppBarTheme(

@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/services/export_service.dart' as export_service;
 import 'package:curiosity/theme/colors.dart';
-import 'package:curiosity/widgets/citation_chip.dart';
 import 'package:curiosity/widgets/listen_button.dart';
 
 class AnswerActions extends StatefulWidget {
@@ -45,9 +44,6 @@ class _AnswerActionsState extends State<AnswerActions> {
 
   @override
   Widget build(BuildContext context) {
-    final sources = widget.turn.sources;
-    final sourceCount = sources.length;
-
     return Row(
       children: [
         // Listen button
@@ -109,79 +105,10 @@ class _AnswerActionsState extends State<AnswerActions> {
           tooltip: 'Bad response',
           onTap: () => setState(() => _liked = _liked == false ? null : false),
         ),
-        const Spacer(),
-        // "N sources" button with up to 3 overlapping favicons
-        if (sourceCount > 0)
-          InkWell(
-            onTap: widget.onOpenSources,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border, width: 1),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildOverlappingFavicons(sources),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$sourceCount source${sourceCount > 1 ? 's' : ''}',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
     );
   }
 
-  Widget _buildOverlappingFavicons(List<Source> sources) {
-    final preview = sources.take(3).toList();
-    const double size = 16;
-    const double overlap = 10;
-    final totalWidth = size + (preview.length - 1) * overlap;
-
-    return SizedBox(
-      width: totalWidth,
-      height: size,
-      child: Stack(
-        children: [
-          for (int i = 0; i < preview.length; i++)
-            Positioned(
-              left: i * overlap,
-              child: Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.surface, width: 1.5),
-                  color: AppColors.border,
-                ),
-                child: ClipOval(
-                  child: Image.network(
-                    'https://www.google.com/s2/favicons?domain=${cleanDomain(preview[i].url)}&sz=32',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(
-                      Icons.language,
-                      size: 10,
-                      color: AppColors.iconMuted,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _ActionIconBtn extends StatelessWidget {

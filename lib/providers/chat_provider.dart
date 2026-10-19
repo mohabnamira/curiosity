@@ -65,6 +65,9 @@ class ChatNotifier extends Notifier<ChatState> {
   static const int _maxThreads = 50;
 
   final Set<String> _cancelledTurnIds = {};
+  final Set<String> _liveTurnIds = {};
+
+  bool isLiveTurn(String id) => _liveTurnIds.contains(id);
 
   // TODO(backend): server keeps streaming until cancel support exists
   void cancelTurn(String id) {
@@ -174,6 +177,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
   String sendQuery(String query) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
+    _liveTurnIds.add(id);
 
     final finished = state.turns
         .where((t) => t.status == TurnStatus.done && t.answer.isNotEmpty)

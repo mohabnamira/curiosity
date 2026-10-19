@@ -1,33 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:markdown/markdown.dart' as md;
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/answer_actions.dart';
-import 'package:curiosity/widgets/citation_syntax.dart';
-import 'package:curiosity/widgets/shared/code_block.dart';
 import 'package:curiosity/widgets/skeleton_shimmer.dart';
 import 'package:curiosity/widgets/sources_panel.dart';
+import 'package:curiosity/widgets/sources_pill.dart';
+import 'package:curiosity/widgets/typewriter_markdown.dart';
 
 class AnswerView extends StatefulWidget {
   final Turn turn;
   final bool isLatest;
+  final bool animateTypewriter;
   final ValueChanged<String> onAskQuery;
   final ValueChanged<int> onHighlightSource;
   final int? highlightedSourceIndex;
   final VoidCallback onRetry;
   final bool showInlineSources;
+  final VoidCallback? onToggleDesktopSources;
 
   const AnswerView({
     super.key,
     required this.turn,
     required this.isLatest,
+    this.animateTypewriter = false,
     required this.onAskQuery,
     required this.onHighlightSource,
     this.highlightedSourceIndex,
     required this.onRetry,
     required this.showInlineSources,
+    this.onToggleDesktopSources,
   });
 
   @override
@@ -36,6 +38,29 @@ class AnswerView extends StatefulWidget {
 
 class _AnswerViewState extends State<AnswerView> {
   bool _mobileSourcesExpanded = false;
+  bool _typingFinished = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _typingFinished = !widget.animateTypewriter || widget.turn.status == TurnStatus.done;
+  }
+
+  @override
+  void didUpdateWidget(AnswerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.animateTypewriter) {
+      _typingFinished = true;
+    }
+  }
+
+  void _onSourcesPillTap() {
+    if (widget.showInlineSources) {
+      setState(() => _mobileSourcesExpanded = !_mobileSourcesExpanded);
+    } else {
+      widget.onToggleDesktopSources?.call();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,56 +99,36 @@ class _AnswerViewState extends State<AnswerView> {
             ),
           ),
 
-          // 2. Muted caption "Researched {n}s" / "Searching..."
+          // 2. Sources pill above answer
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                if (isSearching) ...[
-                  const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Searching...',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ] else if (turn.researchedSeconds != null) ...[
-                  const Icon(
-                    Icons.bolt_rounded,
-                    size: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Researched ${turn.researchedSeconds}s',
-                    style: GoogleFonts.inter(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ],
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SourcesPill(
+                sources: turn.sources,
+                researchedSeconds: turn.researchedSeconds,
+                isSearching: isSearching,
+                onTap: _onSourcesPillTap,
+              ),
             ),
           ),
 
           // Mobile sources collapsible strip
-          if (widget.showInlineSources && turn.sources.isNotEmpty) ...[
+          if (widget.showInlineSources && turn.sources.isNotEmpty && _mobileSourcesExpanded) ...[
             _buildMobileSourcesAccordion(),
             const SizedBox(height: 14),
           ],
 
           // 3. Answer body
           if (turn.answer.isNotEmpty)
-            _buildAnswerBody()
+            TypewriterMarkdown(
+              turn: turn,
+              animate: widget.animateTypewriter,
+              onHighlightSource: widget.onHighlightSource,
+              onTypingFinished: () {
+                if (mounted) setState(() => _typingFinished = true);
+              },
+            )
           else if (isGenerating || isSearching)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
@@ -166,36 +171,34 @@ class _AnswerViewState extends State<AnswerView> {
             ),
           ],
 
-          // 4. Answer actions row
-          if (isDone && turn.answer.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            AnswerActions(
-              turn: turn,
-              onOpenSources: () {
-                if (widget.showInlineSources) {
-                  setState(() => _mobileSourcesExpanded = !_mobileSourcesExpanded);
-                } else if (turn.sources.isNotEmpty) {
-                  widget.onHighlightSource(0);
-                }
-              },
+          // 4. Answer actions row & related questions with fade-in after typing finishes
+          AnimatedOpacity(
+            opacity: (isDone && _typingFinished && turn.answer.isNotEmpty) ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 300),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (turn.answer.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  AnswerActions(turn: turn),
+                ],
+                if (turn.relatedQuestions.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Related',
+                    style: GoogleFonts.inter(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final q in turn.relatedQuestions) _buildRelatedQuestionRow(q),
+                ],
+              ],
             ),
-          ],
-
-          // 5. Related questions
-          if (isDone && turn.relatedQuestions.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Text(
-              'Related',
-              style: GoogleFonts.inter(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            for (final q in turn.relatedQuestions) _buildRelatedQuestionRow(q),
-          ],
+          ),
         ],
       ),
     );
@@ -254,56 +257,7 @@ class _AnswerViewState extends State<AnswerView> {
     );
   }
 
-  Widget _buildAnswerBody() {
-    final sourceUrls = widget.turn.sources.map((s) => s.url).toList();
 
-    return MarkdownBody(
-      data: widget.turn.answer,
-      inlineSyntaxes: [
-        CitationSyntax(),
-      ],
-      builders: {
-        'pre': CodeBlockBuilder(),
-        'citation': CitationElementBuilder(
-          sourceUrls: sourceUrls,
-          onCitationTap: widget.onHighlightSource,
-        ),
-      },
-      styleSheet: MarkdownStyleSheet(
-        p: GoogleFonts.newsreader(
-          fontSize: 17,
-          height: 1.65,
-          color: AppColors.textPrimary,
-        ),
-        h1: GoogleFonts.newsreader(
-          fontSize: 24,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
-        h2: GoogleFonts.newsreader(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
-        h3: GoogleFonts.newsreader(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
-        listBullet: GoogleFonts.newsreader(
-          fontSize: 17,
-          color: AppColors.textPrimary,
-        ),
-        code: GoogleFonts.firaCode(
-          fontSize: 13,
-          color: AppColors.textPrimary,
-          backgroundColor: const Color(0xFF1B1D24),
-        ),
-        codeblockDecoration: const BoxDecoration(),
-      ),
-      extensionSet: md.ExtensionSet.gitHubFlavored,
-    );
-  }
 
   Widget _buildRelatedQuestionRow(String q) {
     return _HoverRelatedRow(

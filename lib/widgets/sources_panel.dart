@@ -105,10 +105,11 @@ class _SourcesPanelState extends State<SourcesPanel> {
                 if (widget.isCollapsible && widget.onToggleCollapse != null)
                   IconButton(
                     icon: const Icon(
-                      Icons.keyboard_arrow_up_rounded,
+                      Icons.chevron_right_rounded,
                       size: 20,
                       color: AppColors.iconMuted,
                     ),
+                    tooltip: 'Collapse sources',
                     onPressed: widget.onToggleCollapse,
                   ),
               ],

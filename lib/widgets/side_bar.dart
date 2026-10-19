@@ -231,27 +231,36 @@ class _SideBarState extends ConsumerState<SideBar> {
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
       width: width,
+      clipBehavior: Clip.hardEdge,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(
           right: BorderSide(color: AppColors.border, width: 1),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeader(effectiveCollapsed),
-          const SizedBox(height: 12),
-          _buildNewThreadButton(effectiveCollapsed),
-          const SizedBox(height: 12),
-          if (!effectiveCollapsed)
-            Expanded(
-              child: _buildHistoryList(groupedThreads, activeThreadId),
-            )
-          else
-            const Spacer(),
-          if (!widget.isDrawer) _buildFooter(effectiveCollapsed),
-        ],
+      child: OverflowBox(
+        minWidth: 0,
+        maxWidth: 260,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: 260,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeader(effectiveCollapsed),
+              const SizedBox(height: 12),
+              _buildNewThreadButton(effectiveCollapsed),
+              const SizedBox(height: 12),
+              if (!effectiveCollapsed)
+                Expanded(
+                  child: _buildHistoryList(groupedThreads, activeThreadId),
+                )
+              else
+                const Spacer(),
+              if (!widget.isDrawer) _buildFooter(effectiveCollapsed),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -259,89 +268,118 @@ class _SideBarState extends ConsumerState<SideBar> {
   Widget _buildHeader(bool collapsed) {
     return Container(
       height: 56,
-      padding: EdgeInsets.symmetric(horizontal: collapsed ? 10 : 14),
       alignment: Alignment.centerLeft,
-      child: Row(
-        mainAxisAlignment:
-            collapsed ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: SizedBox(
+          width: 260,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    width: 28,
-                    height: 28,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(
-                      Icons.auto_awesome,
-                      size: 24,
-                      color: AppColors.textPrimary,
+                // Logo in a fixed 40x40 centered box so it never shifts
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.auto_awesome,
+                          size: 24,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                if (!collapsed) ...[
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      'Curiosity',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                // Expanded title and collapse button
+                Expanded(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 150),
+                    opacity: collapsed ? 0.0 : 1.0,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Curiosity',
+                            style: GoogleFonts.inter(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                        if (!widget.isDrawer)
+                          IconButton(
+                            icon: const Icon(Icons.menu_open_rounded, size: 20),
+                            color: AppColors.iconMuted,
+                            tooltip: 'Collapse sidebar',
+                            onPressed: collapsed ? null : _toggleCollapsed,
+                          ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ],
             ),
           ),
-          if (!collapsed && !widget.isDrawer)
-            IconButton(
-              icon: const Icon(Icons.menu_open_rounded, size: 20),
-              color: AppColors.iconMuted,
-              tooltip: 'Collapse sidebar',
-              onPressed: _toggleCollapsed,
-            ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildNewThreadButton(bool collapsed) {
-    if (collapsed) {
-      return Center(
-        child: Tooltip(
-          message: 'New Thread',
-          child: InkWell(
-            onTap: _onNewThread,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border, width: 1),
+    return SizedBox(
+      height: 40,
+      width: 260,
+      child: collapsed
+          ? Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Tooltip(
+                    message: 'New Thread',
+                    child: InkWell(
+                      onTap: _onNewThread,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.border, width: 1),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.add,
+                            color: AppColors.textPrimary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: const Icon(
-                Icons.add,
-                color: AppColors.textPrimary,
-                size: 20,
-              ),
+            )
+          : Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _NewThreadHoverButton(onTap: _onNewThread),
             ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: _NewThreadHoverButton(onTap: _onNewThread),
     );
   }
 
@@ -429,12 +467,22 @@ class _SideBarState extends ConsumerState<SideBar> {
     if (collapsed) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Center(
-          child: IconButton(
-            icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-            color: AppColors.iconMuted,
-            tooltip: 'Expand sidebar',
-            onPressed: _toggleCollapsed,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Center(
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  color: AppColors.iconMuted,
+                  tooltip: 'Expand sidebar',
+                  onPressed: _toggleCollapsed,
+                ),
+              ),
+            ),
           ),
         ),
       );

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/answer_view.dart';
 import 'package:curiosity/widgets/query_input.dart';
 import 'package:curiosity/widgets/side_bar.dart';
-import 'package:curiosity/widgets/source_card.dart';
 import 'package:curiosity/widgets/sources_panel.dart';
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -17,29 +16,47 @@ class ChatPage extends ConsumerStatefulWidget {
   ConsumerState<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends ConsumerState<ChatPage>
-    with SingleTickerProviderStateMixin {
+class _ChatPageState extends ConsumerState<ChatPage> {
+  static const String _sourcesPanelCollapsedKey = 'sources_panel_collapsed';
   final ScrollController _scrollController = ScrollController();
-  late final TabController _tabController;
 
   String? _highlightTurnId;
   int? _highlightIndex;
   bool _showScrollToBottom = false;
   bool _userScrolledUp = false;
+  bool _sourcesPanelCollapsed = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _scrollController.addListener(_onScroll);
+    _loadSourcesPanelPref();
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSourcesPanelPref() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final val = prefs.getBool(_sourcesPanelCollapsedKey);
+      if (val != null && mounted) {
+        setState(() => _sourcesPanelCollapsed = val);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleSourcesPanelCollapsed() async {
+    final next = !_sourcesPanelCollapsed;
+    setState(() => _sourcesPanelCollapsed = next);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_sourcesPanelCollapsedKey, next);
+    } catch (_) {}
   }
 
   void _onScroll() {
@@ -96,6 +113,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
     });
     ref.read(chatNotifierProvider.notifier).setActiveTurn(turnId);
     ref.read(chatNotifierProvider.notifier).setHighlightedSource(index);
+    if (_sourcesPanelCollapsed) {
+      _toggleSourcesPanelCollapsed();
+    }
   }
 
   @override
@@ -116,7 +136,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final isMobile = width < 800;
-        final showRightColumn = width >= 1100;
+        final isDesktop = width >= 1100;
+        final hasSources = activeTurn != null && activeTurn.sources.isNotEmpty;
+        final showRightColumn = isDesktop && hasSources;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -137,26 +159,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
             children: [
               if (!isMobile) const SideBar(),
               Expanded(
-                child: Column(
-                  children: [
-                    // Top Bar with Answer | Links | Images tabs
-                    _buildTopTabBar(),
-                    // Tab content
-                    Expanded(
-                      child: TabBarView(
-                        controller: _tabController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: [
-                          // 1. Answer View
-                          _buildConversationBody(turns, activeTurn, showRightColumn, isMobile),
-                          // 2. Links View
-                          _buildLinksView(activeTurn),
-                          // 3. Images View
-                          _buildImagesView(),
-                        ],
-                      ),
-                    ),
-                  ],
+                child: _buildConversationBody(
+                  turns,
+                  activeTurn,
+                  showRightColumn,
+                  isMobile,
                 ),
               ),
             ],
@@ -166,48 +173,14 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  Widget _buildTopTabBar() {
-    return Container(
-      height: 48,
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border, width: 1),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      alignment: Alignment.centerLeft,
-      child: TabBar(
-        controller: _tabController,
-        isScrollable: true,
-        indicatorColor: AppColors.focus,
-        indicatorWeight: 2,
-        dividerColor: Colors.transparent,
-        labelColor: AppColors.textPrimary,
-        unselectedLabelColor: AppColors.textSecondary,
-        labelStyle: GoogleFonts.inter(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: GoogleFonts.inter(
-          fontSize: 14,
-          fontWeight: FontWeight.normal,
-        ),
-        tabs: const [
-          Tab(text: 'Answer'),
-          Tab(text: 'Links'),
-          Tab(text: 'Images'),
-        ],
-      ),
-    );
-  }
-
   Widget _buildConversationBody(
     List<Turn> turns,
     Turn? activeTurn,
     bool showRightColumn,
     bool isMobile,
   ) {
+    final panelWidth = (!showRightColumn || _sourcesPanelCollapsed) ? 0.0 : 340.0;
+
     return Stack(
       children: [
         Row(
@@ -225,56 +198,95 @@ class _ChatPageState extends ConsumerState<ChatPage>
                     itemBuilder: (context, index) {
                       final turn = turns[index];
                       final isHighlightedForTurn = _highlightTurnId == turn.id;
+                      final isLive = ref.read(chatNotifierProvider.notifier).isLiveTurn(turn.id);
 
                       return AnswerView(
                         turn: turn,
                         isLatest: index == turns.length - 1,
+                        animateTypewriter: isLive,
                         showInlineSources: !showRightColumn,
                         highlightedSourceIndex:
                             isHighlightedForTurn ? _highlightIndex : null,
                         onAskQuery: _ask,
                         onHighlightSource: (sIndex) => _highlight(turn.id, sIndex),
                         onRetry: () => _ask(turn.question),
+                        onToggleDesktopSources: () {
+                          if (showRightColumn) {
+                            if (_sourcesPanelCollapsed) {
+                              _toggleSourcesPanelCollapsed();
+                            }
+                          }
+                        },
                       );
                     },
                   ),
                 ),
               ),
             ),
-            // Right column (~340px) for Sources card on desktop >= 1100px
+            // Right column (~340px) collapsible panel for Sources card on desktop >= 1100px
             if (showRightColumn)
-              Container(
-                width: 340,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                width: panelWidth,
                 decoration: const BoxDecoration(
                   border: Border(
                     left: BorderSide(color: AppColors.border, width: 1),
                   ),
                 ),
-                padding: const EdgeInsets.all(16),
-                child: activeTurn != null && activeTurn.sources.isNotEmpty
-                    ? SourcesPanel(
-                        sources: activeTurn.sources,
-                        highlightedIndex: _highlightTurnId == activeTurn.id
-                            ? _highlightIndex
-                            : null,
-                      )
-                    : Center(
-                        child: Text(
-                          'No sources for this turn',
-                          style: GoogleFonts.inter(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
+                clipBehavior: Clip.hardEdge,
+                child: OverflowBox(
+                  minWidth: 340,
+                  maxWidth: 340,
+                  alignment: Alignment.topLeft,
+                  child: Container(
+                    width: 340,
+                    padding: const EdgeInsets.all(16),
+                    child: SourcesPanel(
+                      sources: activeTurn!.sources,
+                      highlightedIndex: _highlightTurnId == activeTurn.id
+                          ? _highlightIndex
+                          : null,
+                      isCollapsible: true,
+                      onToggleCollapse: _toggleSourcesPanelCollapsed,
+                    ),
+                  ),
+                ),
               ),
           ],
         ),
+        // Re-open sources button when collapsed on desktop
+        if (showRightColumn && _sourcesPanelCollapsed)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Tooltip(
+              message: 'Show sources',
+              child: InkWell(
+                onTap: _toggleSourcesPanelCollapsed,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.border, width: 1),
+                  ),
+                  child: const Icon(
+                    Icons.source_outlined,
+                    size: 16,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Floating circular scroll-to-bottom button
         if (_showScrollToBottom)
           Positioned(
             bottom: 110,
-            right: showRightColumn ? 360 : 28,
+            right: (showRightColumn && !_sourcesPanelCollapsed) ? 360 : 28,
             child: Tooltip(
               message: 'Scroll to bottom',
               child: InkWell(
@@ -307,7 +319,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
         // Sticky bottom input bar with gradient fade and blur
         Positioned(
           left: 0,
-          right: showRightColumn ? 340 : 0,
+          right: (showRightColumn && !_sourcesPanelCollapsed) ? 340 : 0,
           bottom: 0,
           child: _buildStickyInputBar(),
         ),
@@ -333,7 +345,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
             ),
           ),
         ),
-        // BackdropFilter blur (sigma ~12) container with QueryInput
+        // Container with QueryInput
         ClipRect(
           child: Container(
             color: AppColors.background.withValues(alpha: 0.85),
@@ -349,70 +361,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildLinksView(Turn? activeTurn) {
-    if (activeTurn == null || activeTurn.sources.isEmpty) {
-      return Center(
-        child: Text(
-          'No sources for the current turn',
-          style: GoogleFonts.inter(
-            color: AppColors.textSecondary,
-            fontSize: 14,
-          ),
-        ),
-      );
-    }
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
-        child: ListView.builder(
-          padding: const EdgeInsets.all(24),
-          itemCount: activeTurn.sources.length,
-          itemBuilder: (context, index) {
-            return SourceCard(
-              source: activeTurn.sources[index],
-              index: index,
-              isHighlighted: false,
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildImagesView() {
-    // TODO(backend): include_images in Tavily + new message type
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.image_outlined,
-            size: 48,
-            color: AppColors.iconMuted,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Images coming soon',
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Image search results will appear here once backend support is ready.',
-            style: GoogleFonts.inter(
-              color: AppColors.iconMuted,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

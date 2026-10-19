@@ -23,10 +23,12 @@ class QueryInput extends ConsumerStatefulWidget {
   ConsumerState<QueryInput> createState() => _QueryInputState();
 }
 
-class _QueryInputState extends ConsumerState<QueryInput> {
+class _QueryInputState extends ConsumerState<QueryInput>
+    with SingleTickerProviderStateMixin {
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
   final stt.SpeechToText _speech = stt.SpeechToText();
+  late final AnimationController _pulseController;
 
   bool _isFocused = false;
   bool _isListening = false;
@@ -38,10 +40,15 @@ class _QueryInputState extends ConsumerState<QueryInput> {
     _controller = TextEditingController();
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
   }
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _speech.cancel();
     _controller.removeListener(_onTextChanged);
     _focusNode.removeListener(_onFocusChanged);
@@ -165,30 +172,61 @@ class _QueryInputState extends ConsumerState<QueryInput> {
         );
     final isInFlight = inFlightTurn != null;
 
+    if (isInFlight) {
+      if (!_pulseController.isAnimating) {
+        _pulseController.repeat(reverse: true);
+      }
+    } else {
+      if (_pulseController.isAnimating) {
+        _pulseController.stop();
+        _pulseController.value = 0;
+      }
+    }
+
     final currentFocus = chatState.focus;
 
     return Focus(
       onKeyEvent: _handleKeyEvent,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _isFocused ? AppColors.focus : AppColors.border,
-            width: 1,
-          ),
-          boxShadow: _isFocused
-              ? [
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    blurRadius: 12,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : const [],
-        ),
+      child: AnimatedBuilder(
+        animation: _pulseController,
+        builder: (context, child) {
+          final List<BoxShadow> shadows;
+          if (isInFlight) {
+            final alpha = 0.04 + 0.06 * _pulseController.value;
+            shadows = [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: alpha),
+                blurRadius: 24,
+                spreadRadius: 0,
+              ),
+            ];
+          } else if (_isFocused) {
+            shadows = [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: 0.07),
+                blurRadius: 24,
+                spreadRadius: 0,
+              ),
+            ];
+          } else {
+            shadows = const [];
+          }
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.border,
+                width: 1,
+              ),
+              boxShadow: shadows,
+            ),
+            child: child,
+          );
+        },
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -216,6 +254,11 @@ class _QueryInputState extends ConsumerState<QueryInput> {
                     fontSize: 15,
                   ),
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
                   fillColor: Colors.transparent,
