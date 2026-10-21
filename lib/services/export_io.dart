@@ -1,3 +1,4 @@
+import 'package:curiosity/utils/toast.dart';
 import 'package:flutter/material.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -28,9 +29,7 @@ Future<void> exportMarkdown(BuildContext context, Turn turn) async {
     );
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to share: $e')),
-      );
+      showToast(context, 'Failed to share: $e', icon: Icons.error_outline);
     }
   }
 }

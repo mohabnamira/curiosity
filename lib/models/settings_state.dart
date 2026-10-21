@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 enum AnswerFontFamily {
   serif('Serif (Newsreader)'),
   sans('Sans (Inter)'),
-  mono('Mono (Fira Code)');
+  mono('Mono (Fira Code)'),
+  cairo('Arabic (Cairo)');
 
   final String label;
   const AnswerFontFamily(this.label);

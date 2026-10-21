@@ -5,6 +5,7 @@ class AppColors {
   // Dark Palette (default)
   static const background = Color(0xFF0D0E11);
   static const surface = Color(0xFF16181D);
+  static const surfaceHover = Color(0xFF1E2129);
   static const border = Color(0xFF23262F);
   static const textPrimary = Color(0xFFF4F5F6);
   static const textSecondary = Color(0xFF8A8F9B);

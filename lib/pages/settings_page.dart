@@ -9,11 +9,14 @@ import 'package:curiosity/services/chat_web_service.dart';
 import 'package:curiosity/services/export_service.dart' as export_service;
 import 'package:curiosity/services/tts_service.dart';
 import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/utils/toast.dart';
 import 'package:curiosity/widgets/settings_tiles.dart';
 import 'package:curiosity/widgets/side_bar.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
-  const SettingsPage({super.key});
+  final bool isEmbedded;
+
+  const SettingsPage({super.key, this.isEmbedded = false});
 
   @override
   ConsumerState<SettingsPage> createState() => _SettingsPageState();
@@ -94,9 +97,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (confirmed == true && mounted) {
       await ref.read(chatNotifierProvider.notifier).clearAllHistory();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All history cleared.')),
-        );
+        showToast(context, 'All history cleared.', icon: Icons.delete_outline);
       }
     }
   }
@@ -104,9 +105,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void _exportAllJson() {
     final threads = ref.read(chatNotifierProvider).savedThreads;
     if (threads.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No conversations to export.')),
-      );
+      showToast(context, 'No conversations to export.', icon: Icons.info_outline);
       return;
     }
     final rawJson = const JsonEncoder.withIndent('  ').convert(
@@ -126,35 +125,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsNotifierProvider);
     final settingsNotifier = ref.read(settingsNotifierProvider.notifier);
-    final isDesktop = MediaQuery.of(context).size.width >= 800;
+    final isDesktop = MediaQuery.of(context).size.width >= 700;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          'Settings',
-          style: GoogleFonts.inter(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Row(
-        children: [
-          if (isDesktop) const SideBar(),
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 48),
+    Widget content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 48),
                   children: [
                     // 1. APPEARANCE
                     const SettingSectionHeader(
@@ -540,9 +517,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               await settingsNotifier.resetToDefaults();
                               _serverUrlController.clear();
                               if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Settings reset to defaults.')),
-                                );
+                                showToast(context, 'Settings reset to defaults.', icon: Icons.refresh);
                               }
                             },
                             child: const Text('Reset', style: TextStyle(color: Colors.redAccent)),
@@ -553,8 +528,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ],
                 ),
               ),
-            ),
+            );
+
+    if (widget.isEmbedded) {
+      return content;
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text(
+          'Settings',
+          style: GoogleFonts.inter(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
           ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: Row(
+        children: [
+          if (isDesktop) const SideBar(),
+          Expanded(child: content),
         ],
       ),
     );

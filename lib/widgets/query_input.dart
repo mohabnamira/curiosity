@@ -7,6 +7,7 @@ import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/providers/settings_provider.dart';
 import 'package:curiosity/services/tts_service.dart';
 import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/utils/toast.dart';
 
 class QueryInput extends ConsumerStatefulWidget {
   final String hintText;
@@ -41,6 +42,7 @@ class _QueryInputState extends ConsumerState<QueryInput>
     _controller = TextEditingController();
     _controller.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
+    _focusNode.onKeyEvent = _handleKeyEvent;
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -77,12 +79,7 @@ class _QueryInputState extends ConsumerState<QueryInput>
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    showToast(context, message, icon: Icons.mic_none_outlined);
   }
 
   void _submit() {
@@ -166,6 +163,22 @@ class _QueryInputState extends ConsumerState<QueryInput>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(
+      chatNotifierProvider.select((s) => s.turns.any((t) => t.isInFlight)),
+      (prev, isInFlight) {
+        if (isInFlight) {
+          if (!_pulseController.isAnimating) {
+            _pulseController.repeat(reverse: true);
+          }
+        } else {
+          if (_pulseController.isAnimating) {
+            _pulseController.stop();
+            _pulseController.value = 0;
+          }
+        }
+      },
+    );
+
     final chatState = ref.watch(chatNotifierProvider);
     final inFlightTurn = chatState.turns.cast<dynamic>().firstWhere(
           (t) => t.isInFlight,
@@ -173,63 +186,48 @@ class _QueryInputState extends ConsumerState<QueryInput>
         );
     final isInFlight = inFlightTurn != null;
 
-    if (isInFlight) {
-      if (!_pulseController.isAnimating) {
-        _pulseController.repeat(reverse: true);
-      }
-    } else {
-      if (_pulseController.isAnimating) {
-        _pulseController.stop();
-        _pulseController.value = 0;
-      }
-    }
-
     final currentFocus = chatState.focus;
     final settings = ref.watch(settingsNotifierProvider);
     final accent = settings.accentColor.color;
 
-    return Focus(
-      onKeyEvent: _handleKeyEvent,
-      child: AnimatedBuilder(
-        animation: _pulseController,
-        builder: (context, child) {
-          final List<BoxShadow> shadows;
-          if (isInFlight) {
-            final alpha = 0.05 + 0.08 * _pulseController.value;
-            shadows = [
-              BoxShadow(
-                color: accent.withValues(alpha: alpha),
-                blurRadius: 24,
-                spreadRadius: 0,
-              ),
-            ];
-          } else if (_isFocused) {
-            shadows = [
-              BoxShadow(
-                color: accent.withValues(alpha: 0.12),
-                blurRadius: 24,
-                spreadRadius: 0,
-              ),
-            ];
-          } else {
-            shadows = const [];
-          }
-
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.border,
-                width: 1,
-              ),
-              boxShadow: shadows,
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final List<BoxShadow> shadows;
+        if (isInFlight) {
+          final alpha = 0.05 + 0.08 * _pulseController.value;
+          shadows = [
+            BoxShadow(
+              color: accent.withValues(alpha: alpha),
+              blurRadius: 24,
+              spreadRadius: 0,
             ),
-            child: child,
-          );
-        },
+          ];
+        } else if (_isFocused) {
+          shadows = [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.12),
+              blurRadius: 24,
+              spreadRadius: 0,
+            ),
+          ];
+        } else {
+          shadows = const [];
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _isFocused ? accent.withValues(alpha: 0.5) : AppColors.border,
+              width: 1,
+            ),
+            boxShadow: shadows,
+          ),
+          child: child,
+        );
+      },
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,16 +243,18 @@ class _QueryInputState extends ConsumerState<QueryInput>
                 maxLines: 6,
                 textInputAction: TextInputAction.newline,
                 keyboardType: TextInputType.multiline,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 15,
                   height: 1.4,
+                  fontFamilyFallback: [GoogleFonts.cairo().fontFamily!],
                 ),
                 decoration: InputDecoration(
                   hintText: _isListening ? 'Listening...' : widget.hintText,
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
                     color: _isListening ? Colors.redAccent : AppColors.textSecondary,
                     fontSize: 15,
+                    fontFamilyFallback: [GoogleFonts.cairo().fontFamily!],
                   ),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -289,36 +289,40 @@ class _QueryInputState extends ConsumerState<QueryInput>
             ),
           ],
         ),
-      ),
     );
   }
 
   Widget _buildAttachButton() {
     // TODO(backend): file attachment not supported on backend yet
+    final isNarrow = MediaQuery.of(context).size.width < 400;
+
     return Tooltip(
       message: 'Attach (Coming soon)',
       child: InkWell(
         onTap: () => _showSnack('Attach file is coming soon!'),
         borderRadius: BorderRadius.circular(8),
         child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             color: Colors.transparent,
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add, size: 16, color: AppColors.iconMuted),
-              SizedBox(width: 4),
-              Text(
-                'Attach',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+              const Icon(Icons.add, size: 16, color: AppColors.iconMuted),
+              if (!isNarrow) ...[
+                const SizedBox(width: 4),
+                const Text(
+                  'Attach',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -414,11 +418,12 @@ class _QueryInputState extends ConsumerState<QueryInput>
       child: InkWell(
         onTap: _listen,
         borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.all(6),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          alignment: Alignment.center,
           child: Icon(
             _isListening ? Icons.mic : Icons.mic_none_rounded,
-            size: 18,
+            size: 19,
             color: _isListening ? Colors.redAccent : AppColors.iconMuted,
           ),
         ),
@@ -436,19 +441,23 @@ class _QueryInputState extends ConsumerState<QueryInput>
               message: 'Stop generating',
               child: InkWell(
                 onTap: () => _stopGenerating(inFlightTurnId),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(22),
                 child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.stop_rounded,
-                      size: 16,
-                      color: accent == Colors.white ? AppColors.background : Colors.white,
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.stop_rounded,
+                        size: 16,
+                        color: accent == Colors.white ? AppColors.background : Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -459,21 +468,25 @@ class _QueryInputState extends ConsumerState<QueryInput>
               message: _hasText ? 'Send' : '',
               child: InkWell(
                 onTap: _hasText ? _submit : null,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(22),
                 child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: _hasText ? accent : AppColors.border,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.arrow_upward_rounded,
-                      size: 17,
-                      color: _hasText
-                          ? (accent == Colors.white ? AppColors.background : Colors.white)
-                          : AppColors.iconMuted,
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _hasText ? accent : AppColors.border,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.arrow_upward_rounded,
+                        size: 17,
+                        color: _hasText
+                            ? (accent == Colors.white ? AppColors.background : Colors.white)
+                            : AppColors.iconMuted,
+                      ),
                     ),
                   ),
                 ),

@@ -68,9 +68,9 @@ class ChatNotifier extends Notifier<ChatState> {
 
   bool isLiveTurn(String id) => _liveTurnIds.contains(id);
 
-  // TODO(backend): server keeps streaming until cancel support exists
   void cancelTurn(String id) {
     _cancelledTurnIds.add(id);
+    ref.read(chatWebServiceProvider).sendCancel(id);
     final turn = _findTurn(id);
     if (turn != null && turn.isInFlight) {
       final updated = turn.copyWith(status: TurnStatus.done);

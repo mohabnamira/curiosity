@@ -16,12 +16,12 @@ const String _envServerUrl = String.fromEnvironment(
 
 String get defaultServerUrl {
   if (_envServerUrl.isNotEmpty) return _envServerUrl;
-  // On Android emulator, localhost is 10.0.2.2. On web and physical devices, fallback to localhost.
   if (kIsWeb) {
     return 'ws://127.0.0.1:8000/ws/chat';
   }
+  // On Android physical devices, 10.0.2.2 does not resolve; fallback to developer LAN IP
   return defaultTargetPlatform == TargetPlatform.android
-      ? 'ws://10.0.2.2:8000/ws/chat'
+      ? 'ws://192.168.100.15:8000/ws/chat'
       : 'ws://127.0.0.1:8000/ws/chat';
 }
 
@@ -140,6 +140,17 @@ class ChatWebService {
       'focus': focus,
       'max_results': maxResults,
     }));
+  }
+
+  void sendCancel(String id) {
+    final socket = _socket;
+    if (socket == null) return;
+    try {
+      socket.send(json.encode({
+        'type': 'cancel',
+        'id': id,
+      }));
+    } catch (_) {}
   }
 
   void dispose() {

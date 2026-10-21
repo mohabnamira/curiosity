@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Keystore & Secrets
+key.properties
+*.jks
+*.keystore
+.env
+server/venv/

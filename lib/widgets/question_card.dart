@@ -31,6 +31,8 @@ class QuestionCard extends StatelessWidget {
             fontSize: 15,
             height: 1.4,
             fontWeight: FontWeight.normal,
+          ).copyWith(
+            fontFamilyFallback: [GoogleFonts.cairo().fontFamily!],
           ),
         ),
       ),

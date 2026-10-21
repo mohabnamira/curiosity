@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/pages/home_page.dart';
 import 'package:curiosity/providers/chat_provider.dart';
 import 'package:curiosity/theme/colors.dart';
 import 'package:curiosity/widgets/answer_view.dart';
+import 'package:curiosity/widgets/connection_banner.dart';
 import 'package:curiosity/widgets/query_input.dart';
 import 'package:curiosity/widgets/side_bar.dart';
 import 'package:curiosity/widgets/sources_panel.dart';
@@ -102,6 +104,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  void _startNewSearch() {
+    ref.read(chatNotifierProvider.notifier).startNewChat();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomePage()),
+      (route) => false,
+    );
+  }
+
   void _ask(String query) {
     ref.read(chatNotifierProvider.notifier).sendQuery(query);
   }
@@ -135,35 +145,70 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final isMobile = width < 800;
+        final isMobile = width < 700;
         final isDesktop = width >= 1100;
         final hasSources = activeTurn != null && activeTurn.sources.isNotEmpty;
         final showRightColumn = isDesktop && hasSources;
 
         return Scaffold(
           backgroundColor: AppColors.background,
-          drawer: isMobile
-              ? const Drawer(
-                  backgroundColor: AppColors.surface,
-                  child: SideBar(isDrawer: true),
-                )
-              : null,
+          resizeToAvoidBottomInset: true,
           appBar: isMobile
               ? AppBar(
-                  backgroundColor: AppColors.background,
+                  backgroundColor: AppColors.surface,
                   elevation: 0,
-                  iconTheme: const IconThemeData(color: AppColors.textPrimary),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+                    tooltip: 'Back',
+                    onPressed: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (_) => const HomePage()),
+                        );
+                      }
+                    },
+                  ),
+                  title: Text(
+                    activeTurn?.question ?? 'Curiosity',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.add_rounded, color: AppColors.textPrimary),
+                      tooltip: 'New Search',
+                      onPressed: _startNewSearch,
+                    ),
+                  ],
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(1),
+                    child: Container(color: AppColors.border, height: 1),
+                  ),
                 )
               : null,
-          body: Row(
+          body: Column(
             children: [
-              if (!isMobile) const SideBar(),
+              const ConnectionBanner(),
               Expanded(
-                child: _buildConversationBody(
-                  turns,
-                  activeTurn,
-                  showRightColumn,
-                  isMobile,
+                child: Row(
+                  children: [
+                    if (!isMobile) const SideBar(),
+                    Expanded(
+                      child: _buildConversationBody(
+                        turns,
+                        activeTurn,
+                        showRightColumn,
+                        isMobile,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -201,6 +246,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       final isLive = ref.read(chatNotifierProvider.notifier).isLiveTurn(turn.id);
 
                       return AnswerView(
+                        key: ValueKey(turn.id),
                         turn: turn,
                         isLatest: index == turns.length - 1,
                         animateTypewriter: isLive,
@@ -328,39 +374,42 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Widget _buildStickyInputBar() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 32px gradient fade: transparent to background so text scrolls under
-        Container(
-          height: 32,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.background.withValues(alpha: 0.0),
-                AppColors.background,
-              ],
-            ),
-          ),
-        ),
-        // Container with QueryInput
-        ClipRect(
-          child: Container(
-            color: AppColors.background.withValues(alpha: 0.85),
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: QueryInput(
-                hintText: 'Ask a follow-up...',
-                onSubmit: _ask,
+    return SafeArea(
+      top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 32px gradient fade: transparent to background so text scrolls under
+          Container(
+            height: 32,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.background.withValues(alpha: 0.0),
+                  AppColors.background,
+                ],
               ),
             ),
           ),
-        ),
-      ],
+          // Container with QueryInput
+          ClipRect(
+            child: Container(
+              color: AppColors.background.withValues(alpha: 0.85),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: QueryInput(
+                  hintText: 'Ask a follow-up...',
+                  onSubmit: _ask,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

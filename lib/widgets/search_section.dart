@@ -18,9 +18,15 @@ class SearchSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isVerySmall = screenWidth < 400;
+
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        padding: EdgeInsets.symmetric(
+          horizontal: isVerySmall ? 16 : 24,
+          vertical: 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -29,8 +35,8 @@ class SearchSection extends ConsumerWidget {
               borderRadius: BorderRadius.circular(8),
               child: Image.asset(
                 'assets/images/logo.png',
-                width: 44,
-                height: 44,
+                width: isVerySmall ? 36 : 44,
+                height: isVerySmall ? 36 : 44,
                 fit: BoxFit.contain,
                 errorBuilder: (_, _, _) => const Icon(
                   Icons.auto_awesome,
@@ -43,14 +49,14 @@ class SearchSection extends ConsumerWidget {
             Text(
               'What are you curious about?',
               style: GoogleFonts.newsreader(
-                fontSize: 38,
+                fontSize: isVerySmall ? 28 : 38,
                 fontWeight: FontWeight.normal,
                 color: AppColors.textPrimary,
                 height: 1.2,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: isVerySmall ? 20 : 32),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
               child: QueryInput(

@@ -42,21 +42,6 @@ class AnswerView extends ConsumerStatefulWidget {
 
 class _AnswerViewState extends ConsumerState<AnswerView> {
   bool _mobileSourcesExpanded = false;
-  bool _typingFinished = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _typingFinished = !widget.animateTypewriter || widget.turn.status == TurnStatus.done;
-  }
-
-  @override
-  void didUpdateWidget(AnswerView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.animateTypewriter) {
-      _typingFinished = true;
-    }
-  }
 
   void _onSourcesPillTap() {
     if (widget.showInlineSources) {
@@ -113,9 +98,6 @@ class _AnswerViewState extends ConsumerState<AnswerView> {
               turn: turn,
               animate: widget.animateTypewriter,
               onHighlightSource: widget.onHighlightSource,
-              onTypingFinished: () {
-                if (mounted) setState(() => _typingFinished = true);
-              },
             )
           else if (isGenerating || isSearching)
             const Padding(
@@ -161,7 +143,7 @@ class _AnswerViewState extends ConsumerState<AnswerView> {
 
           // 4. Answer actions row & related questions with fade-in after typing finishes
           AnimatedOpacity(
-            opacity: (isDone && _typingFinished && turn.answer.isNotEmpty) ? 1.0 : 0.0,
+            opacity: (isDone && turn.answer.isNotEmpty) ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 300),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:curiosity/models/chat_models.dart';
 import 'package:curiosity/services/export_service.dart' as export_service;
 import 'package:curiosity/theme/colors.dart';
+import 'package:curiosity/utils/toast.dart';
 import 'package:curiosity/widgets/listen_button.dart';
 
 class AnswerActions extends StatefulWidget {
@@ -26,12 +27,7 @@ class _AnswerActionsState extends State<AnswerActions> {
   Future<void> _copyAnswer(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: widget.turn.answer));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Answer copied to clipboard'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    showToast(context, 'Answer copied to clipboard', icon: Icons.copy_rounded);
   }
 
   void _onShareSelected(BuildContext context, String action) {
@@ -165,8 +161,9 @@ class _HoverIconBoxState extends State<_HoverIconBox> {
         child: InkWell(
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.all(7),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            alignment: Alignment.center,
             child: Icon(
               widget.icon,
               size: 16,

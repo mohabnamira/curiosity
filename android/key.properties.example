@@ -1,0 +1,9 @@
+# Example release keystore properties
+# Rename this file to `key.properties` in the android/ directory for release signing.
+# Generate a keystore with:
+# keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias curiosity
+
+keyAlias=curiosity
+keyPassword=your_key_password
+storeFile=release.jks
+storePassword=your_store_password

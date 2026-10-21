@@ -36,6 +36,8 @@ class AppTheme {
         ),
       ),
       fontFamily: GoogleFonts.inter().fontFamily,
+      fontFamilyFallback: [GoogleFonts.cairo().fontFamily!],
+
       inputDecorationTheme: const InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
@@ -59,6 +61,20 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
           side: BorderSide(color: AppColors.border, width: 1),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 10,
+        backgroundColor: const Color(0xFF1E2129),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: Color(0xFF2E323D), width: 1),
+        ),
+        contentTextStyle: GoogleFonts.inter(
+          color: AppColors.textPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
