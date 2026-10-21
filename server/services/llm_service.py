@@ -1,5 +1,6 @@
 import logging
 import re
+from typing import AsyncGenerator
 
 from google import genai
 from google.genai import types
@@ -9,6 +10,15 @@ from pydantic_models.chat_body import HistoryItem
 settings = Settings()
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 logger = logging.getLogger("curiosity")
+
+# Resilient model candidates list in order of preference
+FALLBACK_MODELS = list(dict.fromkeys([
+    settings.GEMINI_MODEL,
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3-flash-preview",
+]))
 
 MAX_HISTORY_TURNS = 3
 MAX_HISTORY_ANSWER_CHARS = 600
@@ -47,16 +57,17 @@ class LLMService:
             f"Latest question: {query}\n\n"
             "Standalone query:"
         )
-        try:
-            response = await client.aio.models.generate_content(
-                model=settings.GEMINI_MODEL,
-                contents=prompt,
-            )
-            text = (response.text or "").strip()
-            return text.splitlines()[0] if text else query
-        except Exception:
-            logger.exception("rewrite_query failed, using original query")
-            return query
+        for model_name in FALLBACK_MODELS:
+            try:
+                response = await client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                )
+                text = (response.text or "").strip()
+                return text.splitlines()[0] if text else query
+            except Exception as e:
+                logger.warning(f"rewrite_query with {model_name} failed ({type(e).__name__}: {e}), trying fallback")
+        return query
 
     def build_prompt(self, query: str, sources: list[dict], history: list[HistoryItem]) -> str:
         blocks = [
@@ -66,15 +77,36 @@ class LLMService:
         history_block = f"CONVERSATION HISTORY:\n\n{history_text(history)}\n\n" if history else ""
         return history_block + "SOURCES:\n\n" + "\n\n".join(blocks) + f"\n\nQUESTION: {query}"
 
-    async def stream_answer(self, query: str, sources: list[dict], history: list[HistoryItem]):
-        stream = await client.aio.models.generate_content_stream(
-            model=settings.GEMINI_MODEL,
-            contents=self.build_prompt(query, sources, history),
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-        )
-        async for chunk in stream:
-            if chunk.text:
-                yield chunk.text
+    async def stream_answer(
+        self, query: str, sources: list[dict], history: list[HistoryItem]
+    ) -> AsyncGenerator[str, None]:
+        contents = self.build_prompt(query, sources, history)
+        config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
+
+        last_error = None
+        for model_name in FALLBACK_MODELS:
+            try:
+                logger.info(f"Streaming answer with model '{model_name}'...")
+                stream = await client.aio.models.generate_content_stream(
+                    model=model_name,
+                    contents=contents,
+                    config=config,
+                )
+                started = False
+                async for chunk in stream:
+                    if chunk.text:
+                        started = True
+                        yield chunk.text
+                if started:
+                    return
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"Model '{model_name}' failed during stream ({type(e).__name__}: {e}). Trying next model..."
+                )
+
+        if last_error:
+            raise last_error
 
     async def generate_related_questions(self, query: str, answer: str) -> list[str]:
         prompt = (
@@ -83,9 +115,14 @@ class LLMService:
             f"Question: {query}\nAnswer: {answer[:1500]}\n\n"
             "Provide ONLY 3 questions, one per line, with no extra numbering or text."
         )
-        response = await client.aio.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-        )
-        lines = [_LIST_MARK.sub("", l).strip() for l in (response.text or "").splitlines()]
-        return [l for l in lines if l][:3]
+        for model_name in FALLBACK_MODELS:
+            try:
+                response = await client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                )
+                lines = [_LIST_MARK.sub("", l).strip() for l in (response.text or "").splitlines()]
+                return [l for l in lines if l][:3]
+            except Exception as e:
+                logger.warning(f"generate_related_questions with {model_name} failed: {e}")
+        return []
