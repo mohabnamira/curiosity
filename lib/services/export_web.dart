@@ -1,9 +1,8 @@
-import 'dart:js_interop';
 import 'package:flutter/material.dart';
 import 'package:curiosity/models/chat_models.dart';
+import 'package:curiosity/utils/download_web.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:web/web.dart' as web;
 
 /// Export the given turn as a Markdown file (web only).
 Future<void> exportMarkdown(BuildContext context, Turn turn) async {
@@ -20,16 +19,11 @@ Future<void> exportMarkdown(BuildContext context, Turn turn) async {
   buffer.writeln('## Answer');
   buffer.writeln(turn.answer);
 
-  final blob = web.Blob(
-    [buffer.toString().toJS].toJS,
-    web.BlobPropertyBag(type: 'text/markdown;charset=utf-8'),
+  downloadTextFile(
+    'curiosity_${turn.id}.md',
+    buffer.toString(),
+    'text/markdown;charset=utf-8',
   );
-  final url = web.URL.createObjectURL(blob);
-  final link = web.HTMLAnchorElement()
-    ..href = url
-    ..download = 'curiosity_${turn.id}.md';
-  link.click();
-  web.URL.revokeObjectURL(url);
 }
 
 /// Export the given turn as a PDF file (web only).
@@ -49,13 +43,15 @@ Future<void> exportPdf(BuildContext context, Turn turn) async {
         pw.Header(level: 0, child: pw.Text('Curiosity Research Report')),
         pw.Paragraph(
           text: 'Question: ${turn.question}',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
         ),
         pw.SizedBox(height: 10),
         if (turn.sources.isNotEmpty) ...[
           pw.Text('Sources:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           ...turn.sources.asMap().entries.map(
-                (e) => pw.Bullet(text: '${e.key + 1}. ${e.value.title} (${e.value.url})'),
+                (entry) => pw.Bullet(
+                  text: '${entry.key + 1}. ${entry.value.title} (${entry.value.url})',
+                ),
               ),
           pw.SizedBox(height: 10),
         ],
@@ -65,8 +61,8 @@ Future<void> exportPdf(BuildContext context, Turn turn) async {
     ),
   );
 
-  await Printing.sharePdf(
-    bytes: await doc.save(),
-    filename: 'curiosity_${turn.id}.pdf',
+  await Printing.layoutPdf(
+    onLayout: (format) async => doc.save(),
+    name: 'curiosity_${turn.id}.pdf',
   );
 }

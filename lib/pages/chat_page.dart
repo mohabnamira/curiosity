@@ -1,3 +1,4 @@
+import 'package:curiosity/utils/download.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -110,6 +111,39 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       MaterialPageRoute(builder: (_) => const HomePage()),
       (route) => false,
     );
+  }
+
+
+  // ignore: unused_element
+  void _exportMarkdown(Turn turn) {
+    final buffer = StringBuffer();
+    buffer.writeln('# Question: ${turn.question}');
+    buffer.writeln();
+    if (turn.sources.isNotEmpty) {
+      buffer.writeln('## Sources');
+      for (int i = 0; i < turn.sources.length; i++) {
+        buffer.writeln('${i + 1}. [${turn.sources[i].title}](${turn.sources[i].url})');
+      }
+      buffer.writeln();
+    }
+    buffer.writeln('## Answer');
+    buffer.writeln(turn.answer);
+
+    try {
+      downloadTextFile(
+        'curiosity_${turn.id}.md',
+        buffer.toString(),
+        'text/markdown;charset=utf-8',
+      );
+    } on UnsupportedError catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'File download is not supported on this platform'),
+          ),
+        );
+      }
+    }
   }
 
   void _ask(String query) {
