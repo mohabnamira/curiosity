@@ -4,25 +4,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
+/// Production backend URL. Replace with your actual Render deployment URL.
+const String kProductionServerUrl = 'wss://REPLACE-ME.onrender.com';
 
-/// Priority: runtime custom URL > SERVER_URL dart-define > WS_URL dart-define > platform default.
-const String _envServerUrl = String.fromEnvironment(
-  'SERVER_URL',
-  defaultValue: String.fromEnvironment(
-    'WS_URL',
-    defaultValue: '',
-  ),
-);
-
+/// Server URL resolution:
+/// a) String.fromEnvironment('SERVER_URL') if non-empty (developer override)
+/// b) else if kDebugMode -> 'localhost:8000'
+/// c) else -> kProductionServerUrl
 String get defaultServerUrl {
-  if (_envServerUrl.isNotEmpty) return _envServerUrl;
-  if (kIsWeb) {
-    return 'ws://127.0.0.1:8000/ws/chat';
+  const envUrl = String.fromEnvironment('SERVER_URL');
+  if (envUrl.isNotEmpty) {
+    return envUrl;
   }
-  // On Android physical devices, 10.0.2.2 does not resolve; fallback to developer LAN IP
-  return defaultTargetPlatform == TargetPlatform.android
-      ? 'ws://192.168.100.15:8000/ws/chat'
-      : 'ws://127.0.0.1:8000/ws/chat';
+  if (kDebugMode) {
+    return 'localhost:8000';
+  }
+  return kProductionServerUrl;
 }
 
 enum ConnectionStatus { connecting, connected, reconnecting, disconnected }
@@ -49,13 +46,17 @@ class ChatWebService {
 
   Stream<void> get connectionLostStream => _connectionLostController.stream;
 
-  Uri _buildUri() {
+  Uri? _buildUri() {
     final raw = (_customUrl?.trim().isNotEmpty == true)
         ? _customUrl!.trim()
         : defaultServerUrl;
-    
+
+    if (raw.trim().isEmpty || raw.contains('REPLACE-ME')) {
+      return null;
+    }
+
     // Support ws://, wss://, http://, https:// or bare host:port
-    String normalized = raw;
+    String normalized = raw.trim();
     if (normalized.startsWith('http://')) {
       normalized = 'ws://${normalized.substring(7)}';
     } else if (normalized.startsWith('https://')) {
@@ -80,13 +81,20 @@ class ChatWebService {
     _messageSub?.cancel();
     _connectionSub?.cancel();
     _socket?.close();
+    _socket = null;
     status.value = ConnectionStatus.connecting;
     connect();
   }
 
   void connect() {
+    final uri = _buildUri();
+    if (uri == null) {
+      status.value = ConnectionStatus.disconnected;
+      return;
+    }
+
     final socket = WebSocket(
-      _buildUri(),
+      uri,
       backoff: ConstantBackoff(const Duration(seconds: 2)),
     );
     _socket = socket;
@@ -123,13 +131,15 @@ class ChatWebService {
     int maxResults = 5,
   }) async {
     final socket = _socket;
-    if (socket == null) throw StateError('Socket not created');
+    if (socket == null) {
+      throw StateError('Could not reach the server');
+    }
 
     final state = socket.connection.state;
     if (state is! Connected && state is! Reconnected) {
       await socket.connection
           .firstWhere((s) => s is Connected || s is Reconnected)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 45));
     }
 
     socket.send(json.encode({
