@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,7 @@ import 'package:curiosity/widgets/citation_syntax.dart';
 import 'package:curiosity/widgets/shared/code_block.dart';
 
 /// Renders streaming and completed markdown answers with citation chips, code blocks,
-/// and font settings, with zero lag and safe syntax sanitization.
+/// and font settings, with smooth throttled typewriter animation and safe syntax sanitization.
 class TypewriterMarkdown extends ConsumerStatefulWidget {
   final Turn turn;
   final bool animate;
@@ -31,7 +32,10 @@ class TypewriterMarkdown extends ConsumerStatefulWidget {
 }
 
 class _TypewriterMarkdownState extends ConsumerState<TypewriterMarkdown> {
+  Timer? _tickerTimer;
+  int _revealedChars = 0;
   bool _finishedNotified = false;
+
   MarkdownStyleSheet? _cachedStyleSheet;
   AnswerFontFamily? _cachedFontFam;
   double? _cachedBaseSize;
@@ -91,13 +95,84 @@ class _TypewriterMarkdownState extends ConsumerState<TypewriterMarkdown> {
   @override
   void initState() {
     super.initState();
-    _checkFinished();
+    if (widget.animate && widget.turn.status != TurnStatus.done) {
+      _revealedChars = (widget.turn.answer.length * 0.2).toInt();
+      _startTicker();
+    } else {
+      _revealedChars = widget.turn.answer.length;
+      _checkFinished();
+    }
   }
 
   @override
   void didUpdateWidget(TypewriterMarkdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _checkFinished();
+    final targetLength = widget.turn.answer.length;
+
+    if (!widget.animate) {
+      _stopTicker();
+      _revealedChars = targetLength;
+      _checkFinished();
+      return;
+    }
+
+    if (_revealedChars < targetLength) {
+      if (_tickerTimer == null || !_tickerTimer!.isActive) {
+        _startTicker();
+      }
+    } else if (widget.turn.status == TurnStatus.done) {
+      _stopTicker();
+      _revealedChars = targetLength;
+      _checkFinished();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopTicker();
+    super.dispose();
+  }
+
+  void _startTicker() {
+    _tickerTimer?.cancel();
+    // 30-33ms timer (~30fps) - optimal balance between silky smooth typing and minimal mobile Markdown re-parsing
+    _tickerTimer = Timer.periodic(const Duration(milliseconds: 32), (_) {
+      final total = widget.turn.answer.length;
+      if (_revealedChars >= total) {
+        if (widget.turn.status == TurnStatus.done) {
+          _stopTicker();
+          _checkFinished();
+        }
+        return;
+      }
+
+      final diff = total - _revealedChars;
+      // Adaptive typing speed:
+      // - small backlog: reveal 2-3 characters per frame (~70-90 cps)
+      // - larger backlog: smoothly speed up so animation never falls far behind
+      final int step;
+      if (diff > 120) {
+        step = (diff / 6).clamp(8, 25).toInt();
+      } else if (diff > 50) {
+        step = (diff / 10).clamp(4, 8).toInt();
+      } else {
+        step = 2;
+      }
+
+      setState(() {
+        _revealedChars = (_revealedChars + step).clamp(0, total);
+      });
+
+      if (_revealedChars >= total && widget.turn.status == TurnStatus.done) {
+        _stopTicker();
+        _checkFinished();
+      }
+    });
+  }
+
+  void _stopTicker() {
+    _tickerTimer?.cancel();
+    _tickerTimer = null;
   }
 
   void _checkFinished() {
@@ -181,7 +256,13 @@ class _TypewriterMarkdownState extends ConsumerState<TypewriterMarkdown> {
     final fontFam = settings.answerFont;
     final isGenerating = widget.turn.status == TurnStatus.generating;
 
-    final sanitizedText = _sanitizeMarkdown(widget.turn.answer);
+    // Use revealed characters if animating, or full text if finished / not animating
+    final fullText = widget.turn.answer;
+    final textToShow = widget.animate && _revealedChars < fullText.length
+        ? fullText.substring(0, _revealedChars)
+        : fullText;
+
+    final sanitizedText = _sanitizeMarkdown(textToShow);
     final styleSheet = _getStyleSheet(fontFam, baseSize);
 
     return Column(
@@ -202,7 +283,7 @@ class _TypewriterMarkdownState extends ConsumerState<TypewriterMarkdown> {
           styleSheet: styleSheet,
           extensionSet: md.ExtensionSet.gitHubFlavored,
         ),
-        if (isGenerating)
+        if (isGenerating || (widget.animate && _revealedChars < fullText.length))
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Row(

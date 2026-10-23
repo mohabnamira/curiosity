@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
 /// Production backend URL. Replace with your actual Render deployment URL.
-const String kProductionServerUrl = 'wss://REPLACE-ME.onrender.com';
-
+const String kProductionServerUrl = 'wss://curiosity-5befc.containers.snapdeploy.app';
 /// Server URL resolution:
 /// a) String.fromEnvironment('SERVER_URL') if non-empty (developer override)
 /// b) else if kDebugMode -> 'localhost:8000'
