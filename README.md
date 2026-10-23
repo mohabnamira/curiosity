@@ -367,40 +367,29 @@ flutter run -d windows     # or macos, linux
 flutter run -d <device-id>
 ```
 
-The client chooses a sensible default host per platform:
+In debug mode, the client connects to `localhost:8000` by default.
 
-| Target | Default host |
-| --- | --- |
-| Web and desktop | `localhost:8000` |
-| Android emulator | `10.0.2.2:8000` |
-| Physical device | Your machine's LAN address, for example `192.168.x.x:8000` |
-
-Override the server at build time or at runtime:
+Developers can optionally override the backend URL at run time:
 
 ```bash
-# Build-time override
+# Optional developer override
 flutter run -d chrome --dart-define=SERVER_URL=localhost:8000
-
-# Secure endpoint
-flutter run --dart-define=SERVER_URL=wss://api.example.com
+flutter run --dart-define=SERVER_URL=wss://custom-backend.example.com
 ```
-
-You can also set a custom Server URL in **Settings** without rebuilding.
-
-> **Android note:** Local `ws://` connections require cleartext traffic, which is enabled via `android:usesCleartextTraffic="true"` in the manifest. Disable it for production builds that use `wss://`.
 
 ### 5. Build for Production
 
+Because the production backend URL is baked directly into the app (`kProductionServerUrl` in `lib/services/chat_web_service.dart`), release builds do not require any flags or user setup:
+
 ```bash
 # Web
-flutter build web --release --dart-define=SERVER_URL=wss://api.example.com
+flutter build web --release
 
-# Android
-flutter build apk --release --dart-define=SERVER_URL=wss://api.example.com
-flutter build appbundle --release --dart-define=SERVER_URL=wss://api.example.com
+# Android APK
+flutter build apk --release
 
-# iOS
-flutter build ios --release --dart-define=SERVER_URL=wss://api.example.com
+# Android App Bundle
+flutter build appbundle --release
 
 # Desktop
 flutter build windows --release
@@ -412,7 +401,85 @@ flutter build linux --release
 
 ## Deployment
 
-### Backend with Docker
+Curiosity is designed for **zero-configuration** deployment: anyone who opens the web app or installs the Android APK can use it immediately without configuring settings or entering a server URL.
+
+### 1. Deploy Backend on Render
+
+The repository includes a `render.yaml` blueprint for streamlined deployment on [Render](https://render.com):
+
+1. Connect your repository to Render as a **Blueprint** or create a new **Web Service**.
+2. Service configuration (populated automatically from `render.yaml`):
+   - **Root Directory**: `server`
+   - **Environment**: Python 3.11+
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. Set the required secret environment variables in your Render service dashboard under **Environment**:
+   - `GEMINI_API_KEY`: Your Google Gemini API key.
+   - `TAVILY_API_KEY`: Your Tavily API key.
+4. Note your public backend domain assigned by Render (e.g., `curiosity-backend.onrender.com`).
+
+> **Note on Free Tier Sleep:** On Render's free tier, backend instances spin down after inactivity. The first query after waking can take approximately 30–60 seconds. Subsequent queries respond instantly. The client wait timeout is set to 45 seconds to accommodate this wake-up period gracefully.
+
+### 2. Bake the Production URL into the App
+
+Open `lib/services/chat_web_service.dart` and replace `kProductionServerUrl` with your deployed Render WebSocket URL:
+
+```dart
+const String kProductionServerUrl = 'wss://<your-service-name>.onrender.com';
+```
+
+Release builds automatically connect to this URL. End users need no configuration or setup. The `SERVER_URL` via `--dart-define` is preserved only as an optional developer override.
+
+### 3. Build Web & Android
+
+#### Web Release
+```bash
+flutter build web --release
+```
+Compiled static assets are generated in `build/web/`.
+
+#### Android APK
+```bash
+flutter build apk --release
+```
+The installable release APK is generated in `build/app/outputs/flutter-apk/app-release.apk`. Both `INTERNET` and `RECORD_AUDIO` permissions are pre-configured in the main manifest.
+
+### 4. Host Web Application (`build/web`)
+
+Deploy the `build/web/` bundle to any static hosting provider:
+
+#### Firebase Hosting
+
+1. Install Firebase CLI and authenticate:
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   ```
+2. Initialize Firebase Hosting in the project root:
+   ```bash
+   firebase init hosting
+   ```
+   - Public directory: `build/web`
+   - Configure as single-page app: `Yes`
+   - Set up automatic builds: `No`
+3. Deploy:
+   ```bash
+   firebase deploy --only hosting
+   ```
+
+#### Netlify
+
+- **Via Netlify CLI**:
+   ```bash
+   npm install -g netlify-cli
+   netlify deploy --prod --dir=build/web
+   ```
+- **Via Netlify Dashboard**:
+   Drag and drop the `build/web` directory into the [Netlify Drop](https://app.netlify.com/drop) console.
+
+### 5. Self-Hosted Backend with Docker (Alternative)
+
+For self-hosting on private VPS or cloud containers:
 
 ```bash
 cd server
@@ -424,17 +491,12 @@ docker run -d \
   curiosity-server
 ```
 
-Recommendations for production:
-
-- Terminate TLS at a reverse proxy (Nginx, Caddy, or a managed load balancer) and expose the service as `wss://`.
-- Ensure the proxy forwards WebSocket upgrade headers and uses a long idle timeout.
+Recommendations for self-hosted production:
+- Terminate TLS at a reverse proxy (Nginx, Caddy, or managed load balancer) and expose the service as `wss://`.
+- Ensure the proxy forwards WebSocket upgrade headers (`Upgrade`, `Connection`) and uses an appropriate idle timeout.
 - Restrict CORS origins to your deployed frontend domain.
 - Store API keys in your platform's secret manager rather than baking them into images.
-- Use the `GET /health` endpoint for container and load balancer health checks.
-
-### Frontend
-
-The Flutter web build output in `build/web` is a static bundle that can be served from any static host (Firebase Hosting, Netlify, Vercel, Cloudflare Pages, S3 with a CDN, or Nginx). Set `<base href>` with `--base-href` when serving from a sub-path.
+- Use `GET /health` for container and load balancer health checks.
 
 ---
 
