@@ -115,6 +115,7 @@ async def chat_socket(ws: WebSocket):
     logger.info(f"WebSocket client connected from {client_host}")
 
     tasks: dict[str, asyncio.Task] = {}
+    query_timestamps: list[float] = []
     try:
         while True:
             try:
@@ -138,6 +139,15 @@ async def chat_socket(ws: WebSocket):
                 logger.warning(f"Invalid request payload received: {err}")
                 await send(ws, "error", None, "Invalid request")
                 continue
+
+            # Per-connection rate limiting: max 10 queries per 60 seconds
+            now = asyncio.get_event_loop().time()
+            query_timestamps = [t for t in query_timestamps if now - t < 60.0]
+            if len(query_timestamps) >= 10:
+                logger.warning(f"Rate limit exceeded for {client_host}")
+                await send(ws, "error", body.id, "Too many requests, please wait a minute")
+                continue
+            query_timestamps.append(now)
 
             task = asyncio.create_task(handle_chat(ws, body))
             if body.id:
