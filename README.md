@@ -4,6 +4,10 @@
 
 Curiosity pairs a Flutter client with a FastAPI WebSocket backend. Every question is rewritten into a standalone search query, grounded in freshly scraped web pages, and answered by Gemini with inline, verifiable citations that link back to the exact source.
 
+**Live demo:** [curiosity.namiramohab.workers.dev](https://curiosity.namiramohab.workers.dev/)
+
+> **Availability note:** The demo frontend is hosted on Cloudflare. The backend currently runs on a temporary free-tier instance, so the demo may be offline at times. If answers fail to load, run the backend locally by following [Getting Started](#getting-started) or see [Live Demo and Hosting](#live-demo-and-hosting).
+
 > **Status:** Active development. The WebSocket protocol and project layout are stable; UI details may change between releases.
 
 ---
@@ -16,7 +20,7 @@ Curiosity pairs a Flutter client with a FastAPI WebSocket backend. Every questio
 - [System Architecture and Data Flow](#system-architecture-and-data-flow)
 - [WebSocket Protocol](#websocket-protocol)
 - [Getting Started](#getting-started)
-- [Deployment](#deployment)
+- [Live Demo and Hosting](#live-demo-and-hosting)
 - [Project Structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
@@ -37,7 +41,7 @@ Curiosity pairs a Flutter client with a FastAPI WebSocket backend. Every questio
 | **Grounded, cited answers** | The model is instructed to answer only from the numbered sources and to cite every claim as `[n]`. Source text is treated as data, never as instructions. |
 | **Related questions** | Three follow-up questions are generated after every answer and rendered as one-tap chips. |
 | **Resilient model handling** | Multi-model fallback with automatic rollover protects against 503 and 429 spikes and deprecated model identifiers. The default model is `gemini-3.5-flash`. |
-| **Semantic re-ranking utility** | A sentence-transformers service (`all-MiniLM-L6-v2`) scores source relevance by cosine similarity against the query and filters weak matches. |
+| **Hardened backend** | CORS middleware, a `GET /health` endpoint for health checks, request validation with strict length limits, and typed error messages. |
 
 ### Conversation and History
 
@@ -50,7 +54,7 @@ Curiosity pairs a Flutter client with a FastAPI WebSocket backend. Every questio
 ### Answer Presentation
 
 - **Typewriter markdown renderer** with virtual code-fence closing, so partially streamed code blocks render correctly.
-- **Interactive citation chips**: tapping `[n]` highlights and scrolls to the matching source card.
+- **Interactive citation chips**: tapping `[n]` highlights and scrolls to the matching source card. Chips display the source domain.
 - **Syntax-styled code blocks** with one-click copy.
 - **Sources pill and inspector**: a compact pill shows source count, research duration, and favicons; an expandable panel shows titles, snippets, external links, and scroll-to-highlight synchronization.
 - **Answer actions**: copy to clipboard, upvote/downvote feedback, export to Markdown, and export to PDF (Web and mobile via `printing` and `share_plus`).
@@ -60,71 +64,28 @@ Curiosity pairs a Flutter client with a FastAPI WebSocket backend. Every questio
 - **Text-to-speech** readout via `flutter_tts` with configurable rate, pitch, and voice, plus play, pause, and stop controls. Citation markers and markdown syntax are stripped before speech.
 - **Voice input** via `speech_to_text` with a microphone button in the query box.
 
-### Customization
+### Customization and Layout
 
 - Settings hub for typography, font size, accent color (Monochrome White, Electric Blue, Emerald Green, Violet, Amber), default focus mode, voice tuning, data export/import, and a custom server URL override.
 - Arabic typography support using the Cairo font as a global fallback for queries and answers.
-- Adaptive layout for desktop, web, tablet, and mobile.
+- Adaptive layout: a permanent collapsible sidebar and optional right-hand sources inspector on wide screens, and a single-column layout with a floating bottom navigation pill on mobile.
+- Unified floating pill toast system for connection status and in-app notifications.
 
 ---
 
 ## Visual Showcase
 
-> Place screenshots in `docs/images/` using the filenames below.
+> Screenshots live in `docs/images/`.
 
-### Home
+| Verified answers | Fully cited sources |
+| --- | --- |
+| ![Streaming answer with inline citation chips and sources pill](docs/images/answer-citations.png) | ![Expanded sources panel with source cards](docs/images/sources-panel.png) |
+| Answers stream through the typewriter markdown renderer. Inline citation chips map directly to the numbered sources, and a pill summarizes source count and research time. | The expanded panel lists each source with its title, snippet, and link, synchronized with citation clicks. |
 
-![Home hero view with search box and focus selector](docs/images/home.png)
-
-The Perplexity-style hero view: branding, a responsive search box, focus mode selector, voice input, and a collapsible sidebar for navigation between Home, Library, and Settings.
-
-### Streaming Answer with Citations
-
-![Streaming answer with inline citation chips](docs/images/answer-streaming.png)
-
-Answers stream token by token through the typewriter markdown renderer. Inline citation chips map directly to the numbered sources.
-
-### Sources Inspector
-
-![Sources pill and expanded sources panel](docs/images/sources-panel.png)
-
-A compact pill summarizes source count, research duration, and favicons. The expanded panel shows titles, snippets, and external links, synchronized with citation clicks.
-
-### Search Focus Modes
-
-![Focus mode menu showing All, Academic, and YouTube](docs/images/focus-modes.png)
-
-Domain-restricted retrieval for broad web search, academic research, or video content.
-
-### Related Questions and Follow-ups
-
-![Related question chips beneath an answer](docs/images/related-questions.png)
-
-Three generated follow-up questions appear after each answer and can be sent with one tap.
-
-### Library
-
-![Library page with conversation search and rename actions](docs/images/library.png)
-
-Browse, search, rename, delete, and resume saved conversations.
-
-### Settings
-
-![Settings page with typography, accent color, voice, and connection options](docs/images/settings.png)
-
-Control typography, accent colors, default focus, voice tuning, data export/import, and the server URL.
-
-### Responsive Mobile Layout
-
-![Mobile layout with floating bottom navigation pill](docs/images/mobile.png)
-
-Below 700 px the interface collapses into a single column with a floating bottom navigation pill.
-
-### Answer Actions and Export
-
-![Answer action bar with copy, feedback, listen, and export controls](docs/images/answer-actions.png)
-
-Copy, upvote/downvote, listen, and export to Markdown or PDF directly from each answer.
+| Targeted search | Runs everywhere |
+| --- | --- |
+| ![Focus menu with All, Academic, and YouTube options](docs/images/focus-modes.png) | ![Desktop and mobile layouts side by side](docs/images/cross-platform.png) |
+| Switch between broad web search, academic sources, and YouTube with the focus selector in the query box. | One codebase serves desktop, web, and mobile, with a floating bottom navigation pill on small screens. |
 
 ---
 
@@ -162,19 +123,21 @@ Copy, upvote/downvote, listen, and export to Markdown or PDF directly from each 
 | --- | --- |
 | Answer generation, query rewriting, related questions | Google Gemini via the `google-genai` SDK (default `gemini-3.5-flash`, with multi-model fallback) |
 | Web search | Tavily Search API |
-| Semantic relevance scoring | `sentence-transformers` (`all-MiniLM-L6-v2`) |
+| Embedding utility | `sentence-transformers` (`all-MiniLM-L6-v2`) |
 
 ### Vector and Embedding Layer
 
-Curiosity does not require an external vector database. Relevance ranking uses in-process embeddings from `all-MiniLM-L6-v2` and NumPy cosine similarity (threshold `0.3`). Conversation persistence is client-side.
+Curiosity does not use an external vector database. The backend includes an optional relevance-ranking utility (`services/sort_source_service.py`) that embeds the query and each source with `all-MiniLM-L6-v2` and scores them by cosine similarity using NumPy. Conversation persistence is entirely client-side.
 
 ### Infrastructure
 
 | Concern | Technology |
 | --- | --- |
+| Frontend hosting | Cloudflare (static Flutter web build) |
+| Backend hosting | Any Docker-capable host with WebSocket support (currently a temporary free-tier instance) |
 | Containerization | Docker (`Dockerfile`, `.dockerignore`) |
 | Configuration | `.env` file loaded by `pydantic-settings` |
-| Client configuration | `--dart-define=SERVER_URL=...` |
+| Client configuration | `--dart-define=SERVER_URL=...` or the in-app Settings page |
 
 ---
 
@@ -191,10 +154,10 @@ Curiosity does not require an external vector database. Relevance ranking uses i
 |    ChatNotifier -- turns, threads, active turn, highlight    |
 |    SettingsNotifier -- preferences (SharedPreferences)       |
 |                                                              |
-|  ChatWebService -- WebSocket, auto-reconnect, host switching |
+|  ChatWebService -- WebSocket, auto-reconnect, host selection |
 +------------------------------+-------------------------------+
                                |
-                   ws://<host>/ws/chat   (JSON messages)
+                  ws(s)://<host>/ws/chat   (JSON messages)
                                |
 +------------------------------v-------------------------------+
 |                      FastAPI Server                          |
@@ -209,7 +172,7 @@ Curiosity does not require an external vector database. Relevance ranking uses i
 |  4. send "search_results"  (index, title, url, snippet)      |
 |  5. LLMService.stream_answer(query, sources, history)        |
 |        -> grounded prompt + citation rules                   |
-|        -> send "content" for every streamed chunk           |
+|        -> send "content" for every streamed chunk            |
 |  6. LLMService.generate_related_questions(query, answer)     |
 |        -> send "related"                                     |
 |  7. send "done"   (or "error" on failure)                    |
@@ -233,15 +196,15 @@ Curiosity does not require an external vector database. Relevance ranking uses i
 
 ### Resilience
 
-- The client reconnects with a constant backoff and fails any in-flight turns when the connection drops, so the UI never hangs.
+- The client reconnects automatically and fails any in-flight turns when the connection drops, so the UI never hangs. A floating toast reports the connection state.
 - The server catches generation errors and returns a typed `error` message; a disconnect cleanly ends the handler.
-- Model failures (503/429/deprecation) roll over to the next configured Gemini model.
+- Model failures (503, 429, deprecation) roll over to the next configured Gemini model.
 
 ---
 
 ## WebSocket Protocol
 
-**Endpoint:** `ws://<host>:8000/ws/chat`
+**Endpoint:** `ws://<host>:8000/ws/chat` for local development, `wss://<host>/ws/chat` in production.
 
 ### Client to Server
 
@@ -297,7 +260,7 @@ Every message has the shape `{ "type": string, "id": string | null, "data": any 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/<your-username>/curiosity.git
+git clone https://github.com/mohabnamira/curiosity.git
 cd curiosity
 ```
 
@@ -314,9 +277,7 @@ venv\Scripts\activate             # Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Create your environment file
-cp .env.example .env
-# Edit .env and add your API keys
+# Create server/.env and add your API keys (see the next section)
 
 # Start the development server
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -327,8 +288,6 @@ Verify the server is up:
 ```bash
 curl http://localhost:8000/health
 ```
-
-The first run downloads the `all-MiniLM-L6-v2` embedding model, which may take a moment.
 
 ### 3. Environment Variables
 
@@ -367,29 +326,40 @@ flutter run -d windows     # or macos, linux
 flutter run -d <device-id>
 ```
 
-In debug mode, the client connects to `localhost:8000` by default.
+The client chooses a sensible default host per platform:
 
-Developers can optionally override the backend URL at run time:
+| Target | Default host |
+| --- | --- |
+| Web and desktop | `localhost:8000` |
+| Android emulator | `10.0.2.2:8000` |
+| Physical device | Your machine's LAN address, for example `192.168.x.x:8000` |
+
+Override the server at build time or at runtime:
 
 ```bash
-# Optional developer override
+# Build-time override
 flutter run -d chrome --dart-define=SERVER_URL=localhost:8000
-flutter run --dart-define=SERVER_URL=wss://custom-backend.example.com
+
+# Secure endpoint
+flutter run --dart-define=SERVER_URL=wss://api.example.com
 ```
+
+You can also set a custom Server URL in **Settings** without rebuilding.
+
+> **Android note:** Local `ws://` connections require cleartext traffic, which is enabled via `android:usesCleartextTraffic="true"` in the manifest. Disable it for production builds that use `wss://`.
 
 ### 5. Build for Production
 
-Because the production backend URL is baked directly into the app (`kProductionServerUrl` in `lib/services/chat_web_service.dart`), release builds do not require any flags or user setup:
-
 ```bash
 # Web
-flutter build web --release
+flutter build web --release --dart-define=SERVER_URL=wss://api.example.com
 
-# Android APK
-flutter build apk --release
+# Android
+flutter build apk --release --dart-define=SERVER_URL=wss://api.example.com
+flutter build appbundle --release --dart-define=SERVER_URL=wss://api.example.com
 
-# Android App Bundle
-flutter build appbundle --release
+# iOS
+flutter build ios --release --dart-define=SERVER_URL=wss://api.example.com
 
 # Desktop
 flutter build windows --release
@@ -399,87 +369,24 @@ flutter build linux --release
 
 ---
 
-## Deployment
+## Live Demo and Hosting
 
-Curiosity is designed for **zero-configuration** deployment: anyone who opens the web app or installs the Android APK can use it immediately without configuring settings or entering a server URL.
+| Component | Platform | Notes |
+| --- | --- | --- |
+| Frontend (Flutter Web) | Cloudflare | Static build served at [curiosity.namiramohab.workers.dev](https://curiosity.namiramohab.workers.dev/) |
+| Backend (FastAPI + WebSocket) | Free-tier cloud instance | Temporary deployment that may be taken down or replaced without notice |
 
-### 1. Deploy Backend on Render
+> **Note:** The hosted backend is a temporary free-tier deployment and is not guaranteed to stay online. The project does not depend on any specific host. Any platform that supports Docker and WebSockets will work.
 
-The repository includes a `render.yaml` blueprint for streamlined deployment on [Render](https://render.com):
+### Pointing the app at a different backend
 
-1. Connect your repository to Render as a **Blueprint** or create a new **Web Service**.
-2. Service configuration (populated automatically from `render.yaml`):
-   - **Root Directory**: `server`
-   - **Environment**: Python 3.11+
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-3. Set the required secret environment variables in your Render service dashboard under **Environment**:
-   - `GEMINI_API_KEY`: Your Google Gemini API key.
-   - `TAVILY_API_KEY`: Your Tavily API key.
-4. Note your public backend domain assigned by Render (e.g., `curiosity-backend.onrender.com`).
+The client reads its server address from the `SERVER_URL` build define, and it can also be changed at runtime from **Settings**, without rebuilding.
 
-> **Note on Free Tier Sleep:** On Render's free tier, backend instances spin down after inactivity. The first query after waking can take approximately 30–60 seconds. Subsequent queries respond instantly. The client wait timeout is set to 45 seconds to accommodate this wake-up period gracefully.
-
-### 2. Bake the Production URL into the App
-
-Open `lib/services/chat_web_service.dart` and replace `kProductionServerUrl` with your deployed Render WebSocket URL:
-
-```dart
-const String kProductionServerUrl = 'wss://<your-service-name>.onrender.com';
-```
-
-Release builds automatically connect to this URL. End users need no configuration or setup. The `SERVER_URL` via `--dart-define` is preserved only as an optional developer override.
-
-### 3. Build Web & Android
-
-#### Web Release
 ```bash
-flutter build web --release
+flutter build web --release --dart-define=SERVER_URL=wss://your-backend.example.com
 ```
-Compiled static assets are generated in `build/web/`.
 
-#### Android APK
-```bash
-flutter build apk --release
-```
-The installable release APK is generated in `build/app/outputs/flutter-apk/app-release.apk`. Both `INTERNET` and `RECORD_AUDIO` permissions are pre-configured in the main manifest.
-
-### 4. Host Web Application (`build/web`)
-
-Deploy the `build/web/` bundle to any static hosting provider:
-
-#### Firebase Hosting
-
-1. Install Firebase CLI and authenticate:
-   ```bash
-   npm install -g firebase-tools
-   firebase login
-   ```
-2. Initialize Firebase Hosting in the project root:
-   ```bash
-   firebase init hosting
-   ```
-   - Public directory: `build/web`
-   - Configure as single-page app: `Yes`
-   - Set up automatic builds: `No`
-3. Deploy:
-   ```bash
-   firebase deploy --only hosting
-   ```
-
-#### Netlify
-
-- **Via Netlify CLI**:
-   ```bash
-   npm install -g netlify-cli
-   netlify deploy --prod --dir=build/web
-   ```
-- **Via Netlify Dashboard**:
-   Drag and drop the `build/web` directory into the [Netlify Drop](https://app.netlify.com/drop) console.
-
-### 5. Self-Hosted Backend with Docker (Alternative)
-
-For self-hosting on private VPS or cloud containers:
+### Self-hosting the backend
 
 ```bash
 cd server
@@ -491,12 +398,17 @@ docker run -d \
   curiosity-server
 ```
 
-Recommendations for self-hosted production:
-- Terminate TLS at a reverse proxy (Nginx, Caddy, or managed load balancer) and expose the service as `wss://`.
-- Ensure the proxy forwards WebSocket upgrade headers (`Upgrade`, `Connection`) and uses an appropriate idle timeout.
-- Restrict CORS origins to your deployed frontend domain.
-- Store API keys in your platform's secret manager rather than baking them into images.
-- Use `GET /health` for container and load balancer health checks.
+Requirements for any host:
+
+- WebSocket support, with upgrade headers forwarded and a long idle timeout.
+- `TAVILY_API_KEY` and `GEMINI_API_KEY` provided as environment variables or secrets, never baked into images.
+- TLS in front of the service so clients connect over `wss://`. Browsers block insecure `ws://` connections from an HTTPS page, so the hosted web frontend requires a secure backend endpoint.
+- `GET /health` configured as the container or load balancer health check.
+- CORS origins restricted to your frontend domain.
+
+### Hosting the frontend
+
+The Flutter web build output in `build/web` is a static bundle that can be served from any static host (Cloudflare, Firebase Hosting, Netlify, Vercel, S3 with a CDN, or Nginx). Set `<base href>` with `--base-href` when serving from a sub-path.
 
 ---
 
@@ -533,7 +445,7 @@ curiosity/
 |       `-- colors.dart               # Palette and accent colors
 |
 |-- server/                           # FastAPI backend
-|   |-- main.py                       # WebSocket endpoint and chat orchestration
+|   |-- main.py                       # WebSocket endpoint, CORS, health check
 |   |-- config.py                     # Settings loaded from .env
 |   |-- requirements.txt
 |   |-- Dockerfile
@@ -544,10 +456,14 @@ curiosity/
 |   `-- services/
 |       |-- search_service.py         # Tavily search + parallel scraping
 |       |-- llm_service.py            # Rewrite, streaming answer, related questions
-|       `-- sort_source_service.py    # Embedding-based relevance ranking
+|       `-- sort_source_service.py    # Optional embedding-based relevance ranking
 |
 |-- docs/
 |   `-- images/                       # README screenshots
+|       |-- answer-citations.png
+|       |-- sources-panel.png
+|       |-- focus-modes.png
+|       `-- cross-platform.png
 |
 |-- android/  ios/  web/              # Platform runners
 |-- windows/  macos/  linux/
@@ -562,7 +478,8 @@ curiosity/
 
 | Symptom | Likely cause and fix |
 | --- | --- |
-| "Reconnecting to server..." toast persists | The backend is not running or `SERVER_URL` is wrong. Confirm `curl http://<host>:8000/health` succeeds. |
+| "Reconnecting to server..." toast persists | The backend is not running or `SERVER_URL` is wrong. Confirm the health endpoint responds. On the hosted demo, the temporary backend may be offline. |
+| Hosted web app cannot connect to a local backend | The page is served over HTTPS, so browsers block `ws://`. Use a `wss://` backend, or run the client locally with `flutter run -d chrome`. |
 | Works on web but not on Android emulator | Use `10.0.2.2:8000`, not `localhost`. |
 | Works on emulator but not on a physical phone | Use your computer's LAN IP, run uvicorn with `--host 0.0.0.0`, and allow port 8000 through the firewall. |
 | "No sources found" | Try switching Focus to **All** or rephrasing the question. |
@@ -578,20 +495,20 @@ curiosity/
 Contributions are welcome.
 
 1. Fork the repository and create a feature branch:
-```bash
+   ```bash
    git checkout -b feat/short-description
-```
+   ```
 2. Keep changes focused and follow the existing architecture (Riverpod notifiers for state, thin widgets, services for I/O).
 3. Run the analyzer and tests before committing:
-```bash
+   ```bash
    flutter analyze
    flutter test
-```
+   ```
 4. Use [Conventional Commits](https://www.conventionalcommits.org) for messages:
-```bash
+   ```bash
    git commit -m "feat(chat): add source count to sources pill"
    git commit -m "fix(ws): fail in-flight turns on disconnect"
-```
+   ```
 5. Open a pull request describing the change, the motivation, and any UI screenshots.
 
 For substantial changes, open an issue first to discuss the approach. Never commit API keys or `.env` files.
